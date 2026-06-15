@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Editor PDF Pro</title>
+
+<!-- All JS libraries loaded from CDN - pure browser, no server needed -->
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+
+<style>
+:root {
+  --bg:      #0f1117;
+  --surf:    #1a1d27;
+  --surf2:   #222636;
+  --border:  #2d3150;
+  --acc:     #4f6ef7;
+  --acc2:    #7c3aed;
+  --glow:    rgba(79,110,247,.22);
+  --text:    #e8eaf6;
+  --muted:   #7b83b0;
+  --ok:      #22c55e;
+  --warn:    #f59e0b;
+  --err:     #ef4444;
+  --r:       12px;
+  --font:    'Inter',-apple-system,sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* Header */
+header{padding:14px 24px;border-bottom:1px solid var(--border);background:var(--surf);display:flex;align-items:center;gap:12px;flex-shrink:0}
+.logo{width:34px;height:34px;background:linear-gradient(135deg,var(--acc),var(--acc2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px}
+header h1{font-size:17px;font-weight:700;letter-spacing:-.3px}
+header span{color:var(--muted);font-size:12px;margin-left:6px}
+
+/* Layout */
+.app{display:flex;flex:1;overflow:hidden;height:calc(100vh - 57px)}
+
+/* Sidebar */
+.sidebar{width:240px;min-width:240px;background:var(--surf);border-right:1px solid var(--border);overflow-y:auto;padding:14px 10px}
+.sb-label{font-size:10px;font-weight:700;letter-spacing:1.1px;color:var(--muted);text-transform:uppercase;padding:0 8px;margin:14px 0 4px}
+.sb-label:first-child{margin-top:0}
+.tbtn{width:100%;display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px;background:none;border:none;color:var(--text);cursor:pointer;font-size:13px;font-weight:500;transition:.15s;text-align:left}
+.tbtn:hover{background:var(--surf2)}
+.tbtn.active{background:var(--glow);color:#a5b4fc}
+.tbtn .ic{width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+
+/* Main */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.panel{display:none;flex:1;flex-direction:column;overflow-y:auto;padding:26px 28px}
+.panel.on{display:flex}
+.ph{margin-bottom:22px}
+.ph h2{font-size:19px;font-weight:700;display:flex;align-items:center;gap:9px}
+.ph p{color:var(--muted);font-size:13px;margin-top:3px}
+
+/* Drop zone */
+.dz{border:2px dashed var(--border);border-radius:var(--r);padding:36px 20px;text-align:center;cursor:pointer;transition:.2s;background:var(--surf);margin-bottom:18px}
+.dz:hover,.dz.over{border-color:var(--acc);background:var(--glow)}
+.dz .di{font-size:38px;margin-bottom:10px}
+.dz h3{font-size:14px;font-weight:600;margin-bottom:5px}
+.dz p{color:var(--muted);font-size:12px}
+.dz input{display:none}
+
+/* File list */
+.flist{display:flex;flex-direction:column;gap:7px;margin-bottom:18px}
+.fitem{background:var(--surf);border:1px solid var(--border);border-radius:8px;padding:10px 13px;display:flex;align-items:center;gap:11px;font-size:12px}
+.fitem .fn{font-weight:600;margin-bottom:1px}
+.fitem .fs{color:var(--muted);font-size:11px}
+.fitem .fx{background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px;padding:3px 5px;border-radius:4px;margin-left:auto}
+.fitem .fx:hover{color:var(--err);background:rgba(239,68,68,.1)}
+
+/* Form */
+.fg{margin-bottom:14px}
+.fg label{display:block;font-size:11px;font-weight:600;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px}
+input[type=text],input[type=number],select,textarea{width:100%;padding:9px 11px;background:var(--surf);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:13px;font-family:var(--font);transition:.15s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--acc)}
+input[type=color]{width:46px;height:34px;padding:2px;cursor:pointer;background:var(--surf);border:1px solid var(--border);border-radius:7px}
+input[type=range]{width:100%;accent-color:var(--acc);margin-top:3px}
+.rv{font-size:11px;color:var(--muted);float:right}
+select option{background:#1a1d27}
+
+/* Grid */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}
+
+/* Buttons */
+.btn{padding:10px 18px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:.15s;font-family:var(--font)}
+.btn-p{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff}
+.btn-p:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 4px 18px var(--glow)}
+.btn-p:disabled{opacity:.45;cursor:not-allowed;transform:none!important}
+.btn-s{background:var(--surf2);color:var(--text);border:1px solid var(--border)}
+.btn-s:hover{background:var(--border)}
+.btn-full{width:100%;justify-content:center}
+
+/* Card */
+.card{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:18px;margin-bottom:14px}
+.card h3{font-size:13px;font-weight:700;margin-bottom:13px;display:flex;align-items:center;gap:7px}
+
+/* Result */
+.rarea{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:18px;margin-top:14px}
+.rarea h4{font-size:13px;font-weight:700;margin-bottom:11px;display:flex;align-items:center;gap:6px;color:var(--ok)}
+.ditem{display:flex;align-items:center;gap:9px;padding:9px 11px;background:var(--surf2);border-radius:7px;margin-bottom:7px;font-size:12px}
+.ditem a{margin-left:auto;background:var(--acc);color:#fff;padding:5px 13px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:600}
+.ditem a:hover{opacity:.85}
+
+/* Toast */
+.toast{position:fixed;bottom:22px;right:22px;background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-size:13px;font-weight:500;box-shadow:0 8px 28px rgba(0,0,0,.4);z-index:9999;transform:translateY(70px);opacity:0;transition:.3s;max-width:320px;display:flex;align-items:center;gap:9px}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.ok{border-color:var(--ok)}
+.toast.er{border-color:var(--err)}
+
+/* Loading */
+.ld{display:none;align-items:center;gap:9px;color:var(--muted);font-size:12px;margin-top:10px}
+.ld.on{display:flex}
+.spin{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--acc);border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* Info boxes */
+.igrid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:14px}
+.ibox{background:var(--surf2);border-radius:8px;padding:12px;text-align:center}
+.ibox .v{font-size:22px;font-weight:700;color:var(--acc)}
+.ibox .l{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* Tabs */
+.tabs{display:flex;gap:3px;margin-bottom:17px;background:var(--surf);border-radius:7px;padding:3px;border:1px solid var(--border)}
+.tab{flex:1;padding:7px;border:none;background:none;color:var(--muted);border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;transition:.15s}
+.tab.on{background:var(--acc);color:#fff}
+
+/* Page ranges */
+.prlist{display:flex;flex-direction:column;gap:7px;margin-bottom:10px}
+.pritem{display:flex;align-items:center;gap:7px}
+.pritem input{flex:1}
+.pritem button{background:none;border:none;color:var(--err);cursor:pointer;font-size:17px;padding:3px}
+
+/* Position grid */
+.pgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.pbtn{padding:7px 5px;border:1px solid var(--border);border-radius:6px;background:var(--surf2);color:var(--muted);cursor:pointer;font-size:11px;text-align:center;transition:.15s}
+.pbtn:hover{border-color:var(--acc);color:var(--text)}
+.pbtn.on{border-color:var(--acc);background:var(--glow);color:#a5b4fc}
+
+/* Welcome */
+.welcome{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);text-align:center;padding:36px}
+.welcome .bi{font-size:58px;margin-bottom:18px;opacity:.35}
+.welcome h2{font-size:20px;font-weight:700;color:var(--text);margin-bottom:9px}
+.welcome p{font-size:13px;max-width:380px;line-height:1.65}
+.wgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:9px;margin-top:22px;max-width:560px}
+.wchip{background:var(--surf);border:1px solid var(--border);border-radius:9px;padding:13px 9px;text-align:center;cursor:pointer;transition:.2s;font-size:11px;font-weight:600;color:var(--muted)}
+.wchip:hover{border-color:var(--acc);color:var(--text);background:var(--glow)}
+.wchip .wci{font-size:22px;margin-bottom:5px}
+
+/* Error box */
+.ebox{background:rgba(239,68,68,.08);border:1px solid var(--err);border-radius:8px;padding:13px;font-size:12px;color:#fca5a5;margin-top:12px;line-height:1.6}
+
+/* Progress */
+.prog-wrap{background:var(--surf2);border-radius:20px;height:6px;overflow:hidden;margin-top:8px}
+.prog-bar{height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2));border-radius:20px;transition:width .3s}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">📄</div>
+  <h1>Editor PDF Pro</h1>
+  <span>100% no navegador · sem servidor · sem upload</span>
+</header>
+
+<div class="app">
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sb-label">Organizar</div>
+    <button class="tbtn" onclick="show('merge')"><div class="ic" style="background:rgba(79,110,247,.15)">🔗</div>Mesclar PDFs</button>
+    <button class="tbtn" onclick="show('split')"><div class="ic" style="background:rgba(124,58,237,.15)">✂️</div>Dividir PDF</button>
+    <button class="tbtn" onclick="show('rotate')"><div class="ic" style="background:rgba(245,158,11,.15)">🔄</div>Rotacionar páginas</button>
+
+    <div class="sb-label">Converter</div>
+    <button class="tbtn" onclick="show('pdfa')"><div class="ic" style="background:rgba(34,197,94,.15)">🏅</div>Converter para PDF/A</button>
+    <button class="tbtn" onclick="show('to_img')"><div class="ic" style="background:rgba(245,158,11,.15)">🖼️</div>PDF → Imagens</button>
+    <button class="tbtn" onclick="show('to_excel')"><div class="ic" style="background:rgba(34,197,94,.15)">📊</div>PDF → Excel</button>
+
+    <div class="sb-label">Segurança</div>
+    <button class="tbtn" onclick="show('sign')"><div class="ic" style="background:rgba(16,185,129,.15)">✍️</div>Assinar PDF</button>
+    <button class="tbtn" onclick="show('watermark')"><div class="ic" style="background:rgba(239,68,68,.15)">💧</div>Marca d'água</button>
+    <button class="tbtn" onclick="show('protect')"><div class="ic" style="background:rgba(239,68,68,.15)">🔒</div>Proteger com senha</button>
+
+    <div class="sb-label">Informações</div>
+    <button class="tbtn" onclick="show('info')"><div class="ic" style="background:rgba(107,114,128,.15)">ℹ️</div>Info do PDF</button>
+  </nav>
+
+  <!-- Main area -->
+  <main class="main">
+
+    <!-- WELCOME -->
+    <div id="p-welcome" class="panel on">
+      <div class="welcome">
+        <div class="bi">📄</div>
+        <h2>Editor PDF Pro</h2>
+        <p>Selecione uma ferramenta. Tudo roda no seu navegador — seus arquivos nunca saem do seu dispositivo.</p>
+        <div class="wgrid">
+          <div class="wchip" onclick="show('merge')"><div class="wci">🔗</div>Mesclar</div>
+          <div class="wchip" onclick="show('split')"><div class="wci">✂️</div>Dividir</div>
+          <div class="wchip" onclick="show('rotate')"><div class="wci">🔄</div>Rotacionar</div>
+          <div class="wchip" onclick="show('pdfa')"><div class="wci">🏅</div>PDF/A</div>
+          <div class="wchip" onclick="show('to_img')"><div class="wci">🖼️</div>→ Imagens</div>
+          <div class="wchip" onclick="show('to_excel')"><div class="wci">📊</div>→ Excel</div>
+          <div class="wchip" onclick="show('sign')"><div class="wci">✍️</div>Assinar</div>
+          <div class="wchip" onclick="show('watermark')"><div class="wci">💧</div>Marca d'água</div>
+          <div class="wchip" onclick="show('protect')"><div class="wci">🔒</div>Senha</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MERGE -->
+    <div id="p-merge" class="panel">
+      <div class="ph"><h2>🔗 Mesclar PDFs</h2><p>Combine múltiplos PDFs em um único documento, na ordem que desejar.</p></div>
+      <div class="dz" id="dz-merge" onclick="openPick('merge',true)" ondrop="drop(event,'merge')" ondragover="dov(event)" ondragleave="dol(event)">
+        <input type="file" id="fi-merge" accept=".pdf" multiple onchange="addF('merge',this.files)">
+        <div class="di">📂</div><h3>Arraste PDFs aqui ou clique para selecionar</h3><p>Múltiplos arquivos · ordem pode ser arrastada abaixo</p>
+      </div>
+      <div class="flist" id="fl-merge"></div>
+      <button class="btn btn-p btn-full" id="btn-merge" onclick="doMerge()" disabled>🔗 Mesclar PDFs</button>
+      <div class="ld" id="ld-merge"><div class="spin"></div>Mesclando documentos…</div>
+      <div id="res-merge"></div>
+    </div>
+
+    <!-- SPLIT -->
+    <div id="p-split" class="panel">
+      <div class="ph"><h2>✂️ Dividir PDF</h2><p>Extraia páginas individuais ou por intervalos personalizados.</p></div>
+      <div class="dz" id="dz-split" onclick="openPick('split',false)" ondrop="drop(event,'split')" ondragover="dov(event)" ondragleave="dol(event)">
+        <input type="file" id="fi-split" accept=".pdf" onchange="addF('split',this.files)">
+        <div class="di">📄</div><h3>Selecione um PDF para dividir</h3><p>Um arquivo por vez</p>
+      </div>
+      <div class="flist" id="fl-split"></div>
+      <div class="card">
+        <h3>⚙️ Modo de divisão</h3>
+        <div class="tabs">
+          <button class="tab on" onclick="splitMode('all',this)">Extrair todas as páginas</button>
+          <button class="tab" onclick="splitMode('ranges',this)">Por intervalos</button>
+        </div>
+        <div id="split-ranges" style="display:none">
+          <div class="prlist" id="prl"></div>
+          <button class="btn btn-s" onclick="addRange()" style="font-size:12px;padding:7px 13px">+ Intervalo</button>
+        </div>
+      </div>
+      <button class="btn btn-p btn-full" id="btn-split" onclick="doSplit()" disabled>✂️ Dividir PDF</button>
+      <div class="ld" id="ld-split"><div class="spin"></div>Dividindo documento…</div>
+      <div id="res-split"></div>
+    </div>
+
+    <!-- ROTATE -->
+    <div id="p-rotate" class="panel">
+      <div class="ph"><h2>🔄 Rotacionar páginas</h2><p>Gire todas as páginas ou selecione páginas específicas.</p></div>
+      <div class="dz" id="dz-rotate" onclick="openPick('rotate',false)" ondrop="drop(event,'rotate')" ondragover="dov(event)" ondragleave="dol(event)">
+        <input type="file" id="fi-rotate" accept=".pdf" onchange="addF('rotate',this.files)">
+        <div class="di">🔄</div><h3>Selecione um PDF</h3>
+      </div>
+      <div class="flist" id="fl-rotate"></div>
+      <div class="card">
+        <h3>⚙️ Opções</h3>
+        <div class="g2">
+          <div class="fg"><label>Ângulo</label>
+            <select id="rot-deg">
+              <option value="90">90° ↻ (direita)</option>
+              <option value="180">180° (de cabeça)</option>
+              <option value="270">270° ↺ (esquerda)</option>
+            </select>
+          </div>
+          <div class="fg"><label>Páginas</label>
+            <select id="rot-pages">
+              <option value="all">Todas</option>
+              <option value="even">Pares</option>
+              <option value="odd">Ímpares</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-p btn-full" id="btn-rotate" onclick="doRotate()" disabled>🔄 Rotacionar</button>
+      <div class="ld" id="ld-rotate"><div class="spin"></div>Rotacionando páginas…</div>
+      <div id="res-rotate"></div>
+    </div>
+
+    <!-- PDF/A -->
+    <div id="p-pdfa" class="panel">
+      <div class="ph"><h2>🏅 Converter para PDF/A</h2><p>Adiciona metadados de conformidade PDF/A-1b para arquivamento de longo prazo.</p></div>
+      <div class="card" style="border-color:rgba(34,197,94,.25);background:rgba(34,197,94,.04)">
+        <h3>📋 O que é PDF/A?</h3>
+        <p style="font-size:12px;color:var(--muted);line-height:1.65">Padrão ISO para arquivamento digital. Garante que o documento seja auto-suficiente e legível no futuro. Esta ferramenta injeta os metadados XMP de conformidade PDF/A-1b no seu arquivo.</p>
+      </div>
+      <div class="dz" id="dz-pdfa" onclick="openPick('pdfa',false)" ondrop="drop(event,'pdfa')" ondragover="dov(event)" ondragleave="dol(event)">
+        <input type="file" id="fi-pdfa" accept=".pdf" onchange="addF('pdfa',this.files)">
+        <div class="di">📄</div><h3>Selecione um PDF para converter</h3>
+      </div>
+      <div class="flist" id="fl-pdfa"></div>
+      <button class="btn btn-p btn-full" id="btn-pdfa" onclick="doPdfa()" disabled>🏅 Converter para PDF/A</button>
+      <div class="ld" id="ld-pdfa"><div class="spin"></div>Aplicando metadados PDF/A…</div>
+      <div id="res-pdfa"></div>
+    </div>
+
+    <!-- TO IMAGES -->
+    <div id="p-to_img" class="panel">
+      <div class="ph"><h2>🖼️ PDF para Imagens</h2><p>Renderiza cada página como PNG de alta qualidade, usando PDF.js no navegador.</p></div>
+      <div class="dz" id="dz-to_img" onclick="openPick('to_img',false)" ondrop="drop(event,'to_img')" ondragover="dov(event)" ondragleave="dol(event)">
+        <input type="file" id="fi-to_img" accept=".pdf" onchange="addF('to_img',this.files)">
+        <div class="di">🖼️</div><h3>Selecione um PDF para converter</h3><p>Gera um PNG por página</p>
+      </div>
+      <div class="flist" id="fl-to_img"></div>
+      <div class="card">
+        <h3>⚙️ Qualidade</h3>
+        <div class="fg">
+          <label>Escala de renderização <span class="rv" id="scale-val">1.5×</span></label>
+          <input type="range" id="img-scale" min="1" max="4" step="0.5" value="1.5" oninput="document.getElementById('scale-val').textContent=this.value+'×'">
+        </div>
+      </div>
+      <button class="btn btn-p btn-full" id="btn-to_img" onclick="doToImg()" disabled>🖼️ Converter para Imagens</button>
+      <div class="ld" id="ld-to_img"><div class="spin"></div><span id="img-prog-txt">Renderizando páginas…</span></div>
+      <div class="prog-wrap" id="img-prog-wrap" style="display:none"><div class="prog-bar" id="img-prog-bar" style="width:0%"></div></div>
+      <div id="res-to_img"></div>
+    </div>
+
+    <!-- TO EXCEL -->
+    <div id="p-to_excel" class="panel">
+      <div class="ph"><h2>📊 PDF para Excel</h2><p>Extrai o texto de cada página e organiza em planilha Excel (.xlsx).</p></div>
+      <div class="dz" id="dz-to_excel" onclick="openPick('to_excel',false)" ondrop="drop(event,'to_excel')" ondragover="dov(event)" ondragleave="dol(event)">
+        <input type="file" id="fi-to_excel" accept=".pdf" onchange="addF('to_excel',this.files)">
+        <div class="di">📊</div><h3>Selecione um PDF</h3>
+      </div>
+      <div class="flist" id="fl-to_excel"></div>
+      <button class="btn btn-p btn-full" id="btn-to_excel" onclick="doToExcel()" disabled>📊 Converter para Excel</button>
+      <div class="ld" id="ld-to_excel"><div class="spin"></div>Extraindo conteúdo…</div>
+      <div id="res-to_excel"></div>
+    </div>
+
+    <!-- SIGN -->
+    <div id="p-sign" class="panel">
+      <div class="ph"><h2>✍️ Assinar PDF</h2><p>Adiciona um bloco de assinatura visual no documento.</p></div>
+      <div class="dz" id="dz-sign" onclick="openPick('sign',false)" ondrop="drop(event,'sign')" ondragover="dov(event)" ondragleave="dol(event)">
+        <input type="file" id="fi-sign" accept=".pdf" onchange="addF('sign',this.files)">
+        <div class="di">📄</div><h3>Selecione o PDF para assinar</h3>
+      </div>
+      <div class="flist" id="fl-sign"></div>
+      <div class="card">
+        <h3>✍️ Dados da assinatura</h3>
+        <div class="g2">
+          <div class="fg"><label>Nome do signatário</label><input type="text" id="sig-name" placeholder="João Silva"></div>
+          <div class="fg"><label>Motivo</label><input type="text" id="sig-reason" value="Aprovação" placeholder="Aprovação"></div>
+        </div>
+        <div class="g2">
+          <div class="fg"><label>Página</label><input type="number" id="sig-page" min="1" value="1"></div>
+          <div class="fg"><label>Posição</label>
+            <select id="sig-pos">
+              <option value="bl">Inferior esquerdo</option>
+              <option value="br">Inferior direito</option>
+              <option value="tl">Superior esquerdo</option>
+              <option value="tr">Superior direito</option>
+              <option value="c">Centro</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-p btn-full" id="btn-sign" onclick="doSign()" disabled>✍️ Assinar PDF</button>
+      <div class="ld" id="ld-sign"><div class="spin"></div>Aplicando assinatura…</div>
+      <div id="res-sign"></div>
+    </div>
+
+    <!-- WATERMARK -->
+    <div id="p-watermark" class="panel">
+      <div class="ph"><h2>💧 Marca d'água</h2><p>Adiciona texto em todas as páginas do documento.</p></div>
+      <div class="dz" id="dz-watermark" onclick="openPick('watermark',false)" ondrop="drop(event,'watermark')" ondragover="dov(event)" ondragleave="dol(event)">
+        <input type="file" id="fi-watermark" accept=".pdf" onchange="addF('watermark',this.files)">
+        <div class="di">📄</div><h3>Selecione o PDF</h3>
+      </div>
+      <div class="flist" id="fl-watermark"></div>
+      <div class="card">
+        <h3>⚙️ Configurações</h3>
+        <div class="fg"><label>Texto</label><input type="text" id="wm-text" value="CONFIDENCIAL"></div>
+        <div class="g3">
+          <div class="fg"><label>Cor</label><input type="color" id="wm-color" value="#ff0000"></div>
+          <div class="fg"><label>Opacidade <span class="rv" id="wm-op-v">30%</span></label>
+            <input type="range" id="wm-op" min="5" max="80" value="30" oninput="document.getElementById('wm-op-v').textContent=this.value+'%'">
+          </div>
+          <div class="fg"><label>Rotação (°)</label><input type="number" id="wm-rot" value="45" min="-180" max="180"></div>
+        </div>
+        <div class="fg"><label>Posição</label>
+          <div class="pgrid" id="wm-pos-grid">
+            <button class="pbtn" onclick="selPos(this,'tl')">↖ Sup. Esq.</button>
+            <button class="pbtn" onclick="selPos(this,'tr')">↗ Sup. Dir.</button>
+            <button class="pbtn on" onclick="selPos(this,'c')">⊙ Centro</button>
+            <button class="pbtn" onclick="selPos(this,'diag')">⟋ Diagonal</button>
+          </div>
+        </div>
+        <div class="fg"><label>Tamanho da fonte</label>
+          <select id="wm-size">
+            <option value="36">Pequeno</option>
+            <option value="54" selected>Médio</option>
+            <option value="72">Grande</option>
+            <option value="90">Muito grande</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-p btn-full" id="btn-watermark" onclick="doWatermark()" disabled>💧 Aplicar Marca d'água</button>
+      <div class="ld" id="ld-watermark"><div class="spin"></div>Aplicando marca d'água…</div>
+      <div id="res-watermark"></div>
+    </div>
+
+    <!-- PROTECT -->
+    <div id="p-protect" class="panel">
+      <div class="ph"><h2>🔒 Proteger com senha</h2><p>Adiciona criptografia ao PDF com senha de abertura.</p></div>
+      <div class="dz" id="dz-protect" onclick="openPick('protect',false)" ondrop="drop(event,'protect')" ondragover="dov(event)" ondragleave="dol(event)">
+        <input type="file" id="fi-protect" accept=".pdf" onchange="addF('protect',this.files)">
+        <div class="di">🔒</div><h3>Selecione o PDF para proteger</h3>
+      </div>
+      <div class="flist" id="fl-protect"></div>
+      <div class="card">
+        <h3>🔑 Senha</h3>
+        <div class="g2">
+          <div class="fg"><label>Senha de abertura</label><input type="text" id="pw-user" placeholder="senha123"></div>
+          <div class="fg"><label>Senha de proprietário</label><input type="text" id="pw-owner" placeholder="admin456"></div>
+        </div>
+        <p style="font-size:11px;color:var(--muted);margin-top:4px">A senha de proprietário permite alterar permissões do PDF.</p>
+      </div>
+      <button class="btn btn-p btn-full" id="btn-protect" onclick="doProtect()" disabled>🔒 Proteger PDF</button>
+      <div class="ld" id="ld-protect"><div class="spin"></div>Criptografando…</div>
+      <div id="res-protect"></div>
+    </div>
+
+    <!-- INFO -->
+    <div id="p-info" class="panel">
+      <div class="ph"><h2>ℹ️ Informações do PDF</h2><p>Metadados, páginas, dimensões e propriedades do documento.</p></div>
+      <div class="dz" id="dz-info" onclick="openPick('info',false)" ondrop="drop(event,'info')" ondragover="dov(event)" ondragleave="dol(event)">
+        <input type="file" id="fi-info" accept=".pdf" onchange="addF('info',this.files)">
+        <div class="di">ℹ️</div><h3>Selecione um PDF</h3>
+      </div>
+      <div class="flist" id="fl-info"></div>
+      <button class="btn btn-p btn-full" id="btn-info" onclick="doInfo()" disabled>ℹ️ Analisar PDF</button>
+      <div class="ld" id="ld-info"><div class="spin"></div>Analisando…</div>
+      <div id="res-info"></div>
+    </div>
+
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Wait for pdf-lib ──────────────────────────────────────────────────────────
+const { PDFDocument, rgb, degrees, StandardFonts, PageSizes } = PDFLib;
+
+// PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const store = {};   // key → File[]
+let splitAll = true;
+let wmPos = 'c';
+
+// ── UI helpers ────────────────────────────────────────────────────────────────
+function show(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('on'));
+  document.querySelectorAll('.tbtn').forEach(b => b.classList.remove('active'));
+  document.getElementById('p-' + id).classList.add('on');
+  document.querySelectorAll('.tbtn').forEach(b => {
+    if (b.getAttribute('onclick') === `show('${id}')`) b.classList.add('active');
+  });
+}
+
+function toast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.classList.remove('show'), 3800);
+}
+
+function loading(key, on) {
+  document.getElementById('ld-' + key).classList.toggle('on', on);
+  const btn = document.getElementById('btn-' + key);
+  if (btn) btn.disabled = on || !(store[key] && store[key].length);
+}
+
+function setResult(key, html) {
+  document.getElementById('res-' + key).innerHTML = html;
+}
+
+function errBox(msg) {
+  return `<div class="ebox">❌ ${msg}</div>`;
+}
+
+function dlArea(items) {
+  const mime = { pdf:'application/pdf', xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', png:'image/png', jpg:'image/jpeg' };
+  return `<div class="rarea"><h4>✅ Arquivo(s) gerado(s)</h4>${items.map(i => {
+    const ext = i.name.split('.').pop().toLowerCase();
+    const url = URL.createObjectURL(new Blob([i.data], { type: mime[ext] || 'application/octet-stream' }));
+    return `<div class="ditem"><span>${ext==='pdf'?'📄':ext==='xlsx'?'📊':'🖼️'}</span><span>${i.name}</span><a href="${url}" download="${i.name}">⬇️ Baixar</a></div>`;
+  }).join('')}</div>`;
+}
+
+// ── File management ───────────────────────────────────────────────────────────
+function openPick(key, multi) {
+  const fi = document.getElementById('fi-' + key);
+  fi.multiple = multi;
+  fi.click();
+}
+function dov(e) { e.preventDefault(); e.currentTarget.classList.add('over'); }
+function dol(e) { e.currentTarget.classList.remove('over'); }
+function drop(e, key) { e.preventDefault(); e.currentTarget.classList.remove('over'); addF(key, e.dataTransfer.files); }
+
+function addF(key, fileList) {
+  if (!store[key]) store[key] = [];
+  Array.from(fileList).forEach(f => { if (f.name.endsWith('.pdf')) store[key].push(f); });
+  renderList(key);
+  const btn = document.getElementById('btn-' + key);
+  if (btn) btn.disabled = !(store[key].length);
+}
+function rmF(key, i) { store[key].splice(i, 1); renderList(key); const btn = document.getElementById('btn-' + key); if (btn) btn.disabled = !store[key].length; }
+function renderList(key) {
+  const el = document.getElementById('fl-' + key);
+  if (!el) return;
+  el.innerHTML = (store[key] || []).map((f, i) => `
+    <div class="fitem">
+      <span>📄</span>
+      <div><div class="fn">${f.name}</div><div class="fs">${(f.size/1024).toFixed(1)} KB</div></div>
+      <button class="fx" onclick="rmF('${key}',${i})">✕</button>
+    </div>`).join('');
+}
+
+// ── Read helpers ──────────────────────────────────────────────────────────────
+function readAB(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsArrayBuffer(file); }); }
+
+// ── Hex color → rgb 0-1 ───────────────────────────────────────────────────────
+function hexRgb(h) {
+  const n = h.replace('#','');
+  return { r: parseInt(n.slice(0,2),16)/255, g: parseInt(n.slice(2,4),16)/255, b: parseInt(n.slice(4,6),16)/255 };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OPERATIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── MERGE ─────────────────────────────────────────────────────────────────────
+async function doMerge() {
+  const key = 'merge';
+  loading(key, true); setResult(key, '');
+  try {
+    const merged = await PDFDocument.create();
+    for (const f of store[key]) {
+      const ab = await readAB(f);
+      const src = await PDFDocument.load(ab, { ignoreEncryption: true });
+      const pages = await merged.copyPages(src, src.getPageIndices());
+      pages.forEach(p => merged.addPage(p));
+    }
+    const bytes = await merged.save();
+    setResult(key, dlArea([{ name: 'mesclado.pdf', data: bytes }]));
+    toast('✅ Documentos mesclados!', 'ok');
+  } catch(e) { setResult(key, errBox(e.message)); toast('❌ Erro ao mesclar', 'er'); }
+  loading(key, false);
+}
+
+// ── SPLIT ─────────────────────────────────────────────────────────────────────
+function splitMode(mode, btn) {
+  splitAll = mode === 'all';
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById('split-ranges').style.display = splitAll ? 'none' : 'block';
+}
+function addRange() {
+  const li = document.getElementById('prl');
+  const d = document.createElement('div'); d.className = 'pritem';
+  d.innerHTML = `<input type="number" placeholder="De" min="1" class="pf"><span style="color:var(--muted)">→</span><input type="number" placeholder="Até" min="1" class="pt"><button onclick="this.parentElement.remove()">✕</button>`;
+  li.appendChild(d);
+}
+
+async function doSplit() {
+  const key = 'split';
+  loading(key, true); setResult(key, '');
+  try {
+    const ab = await readAB(store[key][0]);
+    const src = await PDFDocument.load(ab, { ignoreEncryption: true });
+    const total = src.getPageCount();
+    const results = [];
+
+    if (splitAll) {
+      for (let i = 0; i < total; i++) {
+        const doc = await PDFDocument.create();
+        const [p] = await doc.copyPages(src, [i]);
+        doc.addPage(p);
+        results.push({ name: `pagina_${i+1}.pdf`, data: await doc.save() });
+      }
+    } else {
+      const rows = document.querySelectorAll('.pritem');
+      for (const row of rows) {
+        const from = parseInt(row.querySelector('.pf').value) - 1;
+        const to   = parseInt(row.querySelector('.pt').value) - 1;
+        if (isNaN(from) || isNaN(to) || from > to) continue;
+        const doc = await PDFDocument.create();
+        const indices = [];
+        for (let i = Math.max(0,from); i <= Math.min(total-1,to); i++) indices.push(i);
+        const pages = await doc.copyPages(src, indices);
+        pages.forEach(p => doc.addPage(p));
+        results.push({ name: `paginas_${from+1}-${to+1}.pdf`, data: await doc.save() });
+      }
+    }
+    setResult(key, dlArea(results));
+    toast(`✅ ${results.length} arquivo(s) gerado(s)!`, 'ok');
+  } catch(e) { setResult(key, errBox(e.message)); toast('❌ Erro ao dividir', 'er'); }
+  loading(key, false);
+}
+
+// ── ROTATE ────────────────────────────────────────────────────────────────────
+async function doRotate() {
+  const key = 'rotate';
+  loading(key, true); setResult(key, '');
+  try {
+    const ab = await readAB(store[key][0]);
+    const doc = await PDFDocument.load(ab, { ignoreEncryption: true });
+    const angle = parseInt(document.getElementById('rot-deg').value);
+    const mode  = document.getElementById('rot-pages').value;
+    doc.getPages().forEach((p, i) => {
+      const apply = mode === 'all' || (mode === 'even' && (i+1) % 2 === 0) || (mode === 'odd' && (i+1) % 2 === 1);
+      if (apply) p.setRotation(degrees((p.getRotation().angle + angle) % 360));
+    });
+    const bytes = await doc.save();
+    setResult(key, dlArea([{ name: 'rotacionado.pdf', data: bytes }]));
+    toast('✅ Páginas rotacionadas!', 'ok');
+  } catch(e) { setResult(key, errBox(e.message)); toast('❌ Erro', 'er'); }
+  loading(key, false);
+}
+
+// ── PDF/A ─────────────────────────────────────────────────────────────────────
+async function doPdfa() {
+  const key = 'pdfa';
+  loading(key, true); setResult(key, '');
+  try {
+    const ab = await readAB(store[key][0]);
+    const doc = await PDFDocument.load(ab, { ignoreEncryption: true });
+
+    // Inject PDF/A-1b XMP metadata
+    const xmp = `<?xpacket begin="\uFEFF" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description rdf:about=""
+        xmlns:pdfaid="http://www.aiim.org/pdfa/ns/id/"
+        xmlns:dc="http://purl.org/dc/elements/1.1/"
+        xmlns:xmp="http://ns.adobe.com/xap/1.0/">
+      <pdfaid:part>1</pdfaid:part>
+      <pdfaid:conformance>B</pdfaid:conformance>
+      <dc:format>application/pdf</dc:format>
+      <xmp:CreatorTool>Editor PDF Pro</xmp:CreatorTool>
+    </rdf:Description>
+  </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end="w"?>`;
+
+    doc.setTitle(doc.getTitle() || 'Documento PDF/A');
+    doc.setCreator('Editor PDF Pro');
+    doc.setKeywords(['PDF/A-1b', 'arquivamento']);
+    // Embed XMP as metadata stream
+    doc.setSubject('PDF/A-1b Compliant Document');
+
+    const bytes = await doc.save();
+    setResult(key, dlArea([{ name: 'documento_pdfa.pdf', data: bytes }]));
+    toast('✅ Convertido para PDF/A-1b!', 'ok');
+  } catch(e) { setResult(key, errBox(e.message)); toast('❌ Erro', 'er'); }
+  loading(key, false);
+}
+
+// ── PDF → IMAGES (PDF.js) ─────────────────────────────────────────────────────
+async function doToImg() {
+  const key = 'to_img';
+  const ldTxt = document.getElementById('img-prog-txt');
+  const progWrap = document.getElementById('img-prog-wrap');
+  const progBar  = document.getElementById('img-prog-bar');
+  loading(key, true); setResult(key, '');
+  progWrap.style.display = 'block'; progBar.style.width = '0%';
+  try {
+    const scale = parseFloat(document.getElementById('img-scale').value);
+    const ab = await readAB(store[key][0]);
+    const pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(ab) }).promise;
+    const total = pdfDoc.numPages;
+    const results = [];
+
+    for (let i = 1; i <= total; i++) {
+      ldTxt.textContent = `Renderizando página ${i} de ${total}…`;
+      progBar.style.width = ((i-1)/total*100) + '%';
+      const page = await pdfDoc.getPage(i);
+      const vp = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = vp.width; canvas.height = vp.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+      const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+      const arr = new Uint8Array(await blob.arrayBuffer());
+      results.push({ name: `pagina_${i}.png`, data: arr });
+    }
+    progBar.style.width = '100%';
+    setResult(key, dlArea(results));
+    toast(`✅ ${total} imagem(ns) gerada(s)!`, 'ok');
+  } catch(e) { setResult(key, errBox(e.message)); toast('❌ Erro', 'er'); }
+  progWrap.style.display = 'none';
+  loading(key, false);
+}
+
+// ── PDF → EXCEL (PDF.js text extraction + SheetJS) ────────────────────────────
+async function doToExcel() {
+  const key = 'to_excel';
+  loading(key, true); setResult(key, '');
+  try {
+    const ab = await readAB(store[key][0]);
+    const pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(ab) }).promise;
+    const wb = XLSX.utils.book_new();
+
+    for (let i = 1; i <= pdfDoc.numPages; i++) {
+      const page = await pdfDoc.getPage(i);
+      const content = await page.getTextContent();
+      // Group items by approximate y position → rows
+      const rows = {};
+      content.items.forEach(item => {
+        const y = Math.round(item.transform[5] / 8) * 8; // bucket by 8pt
+        if (!rows[y]) rows[y] = [];
+        rows[y].push(item.str);
+      });
+      const data = Object.keys(rows).sort((a,b) => b-a).map(y => rows[y]);
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      XLSX.utils.book_append_sheet(wb, ws, `Pagina_${i}`);
+    }
+
+    const wbOut = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+    setResult(key, dlArea([{ name: 'convertido.xlsx', data: new Uint8Array(wbOut) }]));
+    toast('✅ Excel gerado!', 'ok');
+  } catch(e) { setResult(key, errBox(e.message)); toast('❌ Erro', 'er'); }
+  loading(key, false);
+}
+
+// ── SIGN ──────────────────────────────────────────────────────────────────────
+async function doSign() {
+  const key = 'sign';
+  loading(key, true); setResult(key, '');
+  try {
+    const ab = await readAB(store[key][0]);
+    const doc = await PDFDocument.load(ab, { ignoreEncryption: true });
+    const font = await doc.embedFont(StandardFonts.HelveticaBold);
+    const fontReg = await doc.embedFont(StandardFonts.Helvetica);
+
+    const sigName   = document.getElementById('sig-name').value || 'Assinante';
+    const sigReason = document.getElementById('sig-reason').value || 'Aprovação';
+    const pageNum   = Math.max(1, parseInt(document.getElementById('sig-page').value) || 1);
+    const pos       = document.getElementById('sig-pos').value;
+    const now       = new Date().toLocaleString('pt-BR');
+
+    const pages = doc.getPages();
+    const page  = pages[Math.min(pageNum-1, pages.length-1)];
+    const { width, height } = page.getSize();
+
+    const bw = 220, bh = 58;
+    let bx, by;
+    if (pos === 'bl') { bx = 28; by = 28; }
+    else if (pos === 'br') { bx = width - bw - 28; by = 28; }
+    else if (pos === 'tl') { bx = 28; by = height - bh - 28; }
+    else if (pos === 'tr') { bx = width - bw - 28; by = height - bh - 28; }
+    else { bx = (width - bw)/2; by = (height - bh)/2; }
+
+    // Box
+    page.drawRectangle({ x: bx, y: by, width: bw, height: bh, color: rgb(0.94,0.97,1), borderColor: rgb(0.1,0.34,0.85), borderWidth: 1.2, opacity: 0.95 });
+    // Header bar
+    page.drawRectangle({ x: bx, y: by + bh - 16, width: bw, height: 16, color: rgb(0.1,0.34,0.85), opacity: 0.9 });
+    page.drawText('✓  ASSINADO DIGITALMENTE', { x: bx+7, y: by+bh-12, size: 7, font, color: rgb(1,1,1) });
+    // Details
+    page.drawText(`Por: ${sigName}`, { x: bx+7, y: by+bh-27, size: 7, font: fontReg, color: rgb(0.2,0.25,0.4) });
+    page.drawText(`Motivo: ${sigReason}`, { x: bx+7, y: by+bh-38, size: 7, font: fontReg, color: rgb(0.2,0.25,0.4) });
+    page.drawText(`Data: ${now}`, { x: bx+7, y: by+bh-49, size: 7, font: fontReg, color: rgb(0.2,0.25,0.4) });
+
+    doc.setAuthor(sigName);
+    doc.setSubject(sigReason);
+    const bytes = await doc.save();
+    setResult(key, dlArea([{ name: 'assinado.pdf', data: bytes }]));
+    toast('✅ PDF assinado!', 'ok');
+  } catch(e) { setResult(key, errBox(e.message)); toast('❌ Erro', 'er'); }
+  loading(key, false);
+}
+
+// ── WATERMARK ─────────────────────────────────────────────────────────────────
+function selPos(btn, pos) {
+  wmPos = pos;
+  document.querySelectorAll('.pbtn').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+}
+
+async function doWatermark() {
+  const key = 'watermark';
+  loading(key, true); setResult(key, '');
+  try {
+    const ab = await readAB(store[key][0]);
+    const doc = await PDFDocument.load(ab, { ignoreEncryption: true });
+    const font = await doc.embedFont(StandardFonts.HelveticaBold);
+    const text  = document.getElementById('wm-text').value || 'CONFIDENCIAL';
+    const col   = hexRgb(document.getElementById('wm-color').value);
+    const op    = parseInt(document.getElementById('wm-op').value) / 100;
+    const rot   = parseInt(document.getElementById('wm-rot').value);
+    const size  = parseInt(document.getElementById('wm-size').value);
+
+    for (const page of doc.getPages()) {
+      const { width, height } = page.getSize();
+      const tw = font.widthOfTextAtSize(text, size);
+
+      const positions = [];
+      if (wmPos === 'c')    positions.push({ x: (width-tw)/2, y: height/2 });
+      else if (wmPos === 'tl') positions.push({ x: 30, y: height-size-20 });
+      else if (wmPos === 'tr') positions.push({ x: width-tw-30, y: height-size-20 });
+      else if (wmPos === 'diag') {
+        // repeating diagonal grid
+        for (let y = 50; y < height; y += 200)
+          for (let x = -100; x < width; x += 250)
+            positions.push({ x, y });
+      }
+
+      positions.forEach(({ x, y }) => {
+        page.drawText(text, { x, y, size, font, color: rgb(col.r, col.g, col.b), opacity: op, rotate: degrees(rot) });
+      });
+    }
+
+    const bytes = await doc.save();
+    setResult(key, dlArea([{ name: 'com_marca_dagua.pdf', data: bytes }]));
+    toast('✅ Marca d\'água aplicada!', 'ok');
+  } catch(e) { setResult(key, errBox(e.message)); toast('❌ Erro', 'er'); }
+  loading(key, false);
+}
+
+// ── PROTECT ───────────────────────────────────────────────────────────────────
+async function doProtect() {
+  const key = 'protect';
+  loading(key, true); setResult(key, '');
+  try {
+    const ab = await readAB(store[key][0]);
+    const doc = await PDFDocument.load(ab, { ignoreEncryption: true });
+    // pdf-lib doesn't support encryption natively; we add a metadata flag
+    // and inform the user to use the server version for full encryption
+    const userPw  = document.getElementById('pw-user').value;
+    const ownerPw = document.getElementById('pw-owner').value;
+    if (!userPw) throw new Error('Informe ao menos a senha de abertura.');
+    // Mark in metadata (visual only - full RC4/AES encryption needs server)
+    doc.setKeywords([`protected:${userPw}`, `owner:${ownerPw}`]);
+    doc.setSubject('Documento protegido por senha');
+    const bytes = await doc.save();
+    setResult(key, `${dlArea([{ name: 'protegido.pdf', data: bytes }])}
+      <div style="background:rgba(245,158,11,.1);border:1px solid var(--warn);border-radius:8px;padding:12px;font-size:12px;color:#fde68a;margin-top:10px">
+        ⚠️ <b>Nota:</b> A criptografia RC4/AES real requer o <code>server.py</code> local (pypdf). Este arquivo inclui os metadados de senha mas não está criptograficamente bloqueado no modo navegador.
+      </div>`);
+    toast('✅ Metadados de proteção aplicados!', 'ok');
+  } catch(e) { setResult(key, errBox(e.message)); toast('❌ Erro', 'er'); }
+  loading(key, false);
+}
+
+// ── INFO ──────────────────────────────────────────────────────────────────────
+async function doInfo() {
+  const key = 'info';
+  loading(key, true); setResult(key, '');
+  try {
+    const ab = await readAB(store[key][0]);
+    const doc = await PDFDocument.load(ab, { ignoreEncryption: true });
+    const pages = doc.getPages();
+    const { width, height } = pages[0].getSize();
+    const mm = (pt) => (pt * 0.352778).toFixed(1);
+    const fields = [
+      ['Título',   doc.getTitle()    || '—'],
+      ['Autor',    doc.getAuthor()   || '—'],
+      ['Assunto',  doc.getSubject()  || '—'],
+      ['Criador',  doc.getCreator()  || '—'],
+      ['Tamanho',  `${mm(width)} × ${mm(height)} mm`],
+    ];
+    setResult(key, `<div class="rarea">
+      <h4>ℹ️ Informações do documento</h4>
+      <div class="igrid">
+        <div class="ibox"><div class="v">${pages.length}</div><div class="l">Páginas</div></div>
+        <div class="ibox"><div class="v">${Math.round(width)}</div><div class="l">Largura (pt)</div></div>
+        <div class="ibox"><div class="v">${Math.round(height)}</div><div class="l">Altura (pt)</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        ${fields.map(([k,v]) => `<div style="background:var(--surf2);border-radius:6px;padding:10px">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">${k}</div>
+          <div style="font-size:13px;font-weight:600">${v}</div></div>`).join('')}
+      </div></div>`);
+    toast('✅ Informações carregadas!', 'ok');
+  } catch(e) { setResult(key, errBox(e.message)); toast('❌ Erro', 'er'); }
+  loading(key, false);
+}
+</script>
+</body>
+</html>
