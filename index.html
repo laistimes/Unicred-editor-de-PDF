@@ -181,6 +181,8 @@ select option{background:#1a1d27}
     <button class="tbtn" onclick="show('pdfa')"><div class="ic" style="background:rgba(34,197,94,.15)">🏅</div>Converter para PDF/A</button>
     <button class="tbtn" onclick="show('to_img')"><div class="ic" style="background:rgba(245,158,11,.15)">🖼️</div>PDF → Imagens</button>
     <button class="tbtn" onclick="show('to_excel')"><div class="ic" style="background:rgba(34,197,94,.15)">📊</div>PDF → Excel</button>
+    <button class="tbtn" onclick="show('to_word')"><div class="ic" style="background:rgba(37,99,235,.15)">📝</div>PDF → Word</button>
+    <button class="tbtn" onclick="show('to_ppt')"><div class="ic" style="background:rgba(234,88,12,.15)">📊</div>PDF → PowerPoint</button>
 
     <div class="sb-label">Segurança</div>
     <button class="tbtn" onclick="show('sign')"><div class="ic" style="background:rgba(16,185,129,.15)">✍️</div>Assinar PDF</button>
@@ -208,6 +210,8 @@ select option{background:#1a1d27}
           <div class="wchip" onclick="show('pdfa')"><div class="wci">🏅</div>PDF/A</div>
           <div class="wchip" onclick="show('to_img')"><div class="wci">🖼️</div>→ Imagens</div>
           <div class="wchip" onclick="show('to_excel')"><div class="wci">📊</div>→ Excel</div>
+          <div class="wchip" onclick="show('to_word')"><div class="wci">📝</div>→ Word</div>
+          <div class="wchip" onclick="show('to_ppt')"><div class="wci">📊</div>→ PPT</div>
           <div class="wchip" onclick="show('sign')"><div class="wci">✍️</div>Assinar</div>
           <div class="wchip" onclick="show('watermark')"><div class="wci">💧</div>Marca d'água</div>
           <div class="wchip" onclick="show('protect')"><div class="wci">🔒</div>Senha</div>
@@ -333,6 +337,92 @@ select option{background:#1a1d27}
       <button class="btn btn-p btn-full" id="btn-to_excel" onclick="doToExcel()" disabled>📊 Converter para Excel</button>
       <div class="ld" id="ld-to_excel"><div class="spin"></div>Extraindo conteúdo…</div>
       <div id="res-to_excel"></div>
+    </div>
+
+
+    <!-- PDF TO WORD -->
+    <div id="p-to_word" class="panel">
+      <div class="ph">
+        <h2>📝 PDF para Word</h2>
+        <p>Extrai o texto do PDF e gera um arquivo <b>.docx</b> editável no Word, LibreOffice ou Google Docs.</p>
+      </div>
+
+      <!-- Aviso sobre imagens -->
+      <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.4);border-radius:8px;padding:12px 14px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-start">
+        <span style="font-size:18px;flex-shrink:0">⚠️</span>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#fde68a;margin-bottom:3px">Imagens não são convertidas</div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.6">
+            Somente o <b style="color:var(--text)">texto</b> do PDF é extraído. Imagens, gráficos e elementos visuais
+            <b style="color:var(--text)">não aparecem</b> no documento Word gerado.<br>
+            Se o PDF for composto só de imagens (ex: scan), o resultado pode ficar vazio.
+          </div>
+        </div>
+      </div>
+
+      <div class="dz" onclick="openPick('to_word',false)" ondrop="drop(event,'to_word')" ondragover="dov(event)" ondragleave="dol(event)">
+        <input type="file" id="fi-to_word" accept=".pdf" onchange="addF('to_word',this.files)">
+        <div class="di">📝</div>
+        <h3>Arraste um PDF ou clique para selecionar</h3>
+        <p>Gera arquivo .docx com o texto extraído</p>
+      </div>
+      <div class="flist" id="fl-to_word"></div>
+
+      <div class="card">
+        <h3>⚙️ Opções</h3>
+        <div class="fg">
+          <label>Estilo do documento</label>
+          <select id="word-style">
+            <option value="normal">Normal — parágrafos simples</option>
+            <option value="headings">Detectar títulos automaticamente (linhas em maiúsculas curtas)</option>
+          </select>
+        </div>
+      </div>
+
+      <button class="btn btn-p btn-full" id="btn-to_word" onclick="doToWord()" disabled>📝 Converter para Word</button>
+      <div class="ld" id="ld-to_word"><div class="spin"></div><span id="word-ptxt">Extraindo texto…</span></div>
+      <div class="prog-wrap" id="word-pw" style="display:none"><div class="prog-bar" id="word-pb" style="width:0%"></div></div>
+      <div id="res-to_word"></div>
+    </div>
+
+
+    <!-- PDF TO PPT -->
+    <div id="p-to_ppt" class="panel">
+      <div class="ph">
+        <h2>📊 PDF para PowerPoint</h2>
+        <p>Converte cada página do PDF em um slide. O visual é <b>100% preservado</b> — cada página vira uma imagem no slide.</p>
+      </div>
+      <div style="background:rgba(79,110,247,.08);border:1px solid rgba(79,110,247,.3);border-radius:8px;padding:12px 14px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-start">
+        <span style="font-size:18px;flex-shrink:0">ℹ️</span>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#a5b4fc;margin-bottom:3px">Como funciona</div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.6">
+            Cada página é renderizada como imagem e inserida em um slide.
+            O <b style="color:var(--text)">layout visual é preservado</b> exatamente como no original.
+            O texto nos slides <b style="color:var(--text)">não será editável</b> — para editar texto use PDF → Word.
+          </div>
+        </div>
+      </div>
+      <div class="dz" onclick="openPick('to_ppt',false)" ondrop="drop(event,'to_ppt')" ondragover="dov(event)" ondragleave="dol(event)">
+        <input type="file" id="fi-to_ppt" accept=".pdf" onchange="addF('to_ppt',this.files)">
+        <div class="di">📊</div>
+        <h3>Arraste um PDF ou clique para selecionar</h3>
+        <p>Cada página vira um slide</p>
+      </div>
+      <div class="flist" id="fl-to_ppt"></div>
+      <div class="card">
+        <h3>⚙️ Qualidade</h3>
+        <div class="fg">
+          <label>Resolução <span class="rv" id="ppt-scale-v">1.5×</span></label>
+          <input type="range" id="ppt-scale" min="1" max="3" step="0.5" value="1.5"
+            oninput="document.getElementById('ppt-scale-v').textContent=this.value+'×'">
+        </div>
+        <p style="font-size:11px;color:var(--muted);margin-top:6px">Resolução maior = slides mais nítidos, porém arquivo maior.</p>
+      </div>
+      <button class="btn btn-p btn-full" id="btn-to_ppt" onclick="doToPpt()" disabled>📊 Converter para PowerPoint</button>
+      <div class="ld" id="ld-to_ppt"><div class="spin"></div><span id="ppt-ptxt">Renderizando páginas…</span></div>
+      <div class="prog-wrap" id="ppt-pw" style="display:none"><div class="prog-bar" id="ppt-pb" style="width:0%"></div></div>
+      <div id="res-to_ppt"></div>
     </div>
 
     <!-- SIGN -->
@@ -1046,6 +1136,290 @@ async function doCompress() {
     toast('❌ Erro ao compactar', 'er');
   }
 
+  pw.style.display = 'none';
+  loading(key, false);
+}
+
+
+// ── PDF → WORD (DOCX puro — sem biblioteca externa) ─────────────────────────
+
+function _u32(n){const b=new Uint8Array(4);b[0]=n&0xff;b[1]=(n>>8)&0xff;b[2]=(n>>16)&0xff;b[3]=(n>>24)&0xff;return b;}
+function _u16(n){return new Uint8Array([n&0xff,(n>>8)&0xff]);}
+function _crc32(data){
+  let c=0xFFFFFFFF;
+  const t=_crc32._t||(_crc32._t=(()=>{const t=new Uint32Array(256);for(let i=0;i<256;i++){let c=i;for(let j=0;j<8;j++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[i]=c;}return t;})());
+  for(let i=0;i<data.length;i++)c=t[(c^data[i])&0xff]^(c>>>8);
+  return(c^0xFFFFFFFF)>>>0;
+}
+function _cat(...arrays){const total=arrays.reduce((s,a)=>s+a.length,0);const out=new Uint8Array(total);let off=0;for(const a of arrays){out.set(a,off);off+=a.length;}return out;}
+function _str(s){return new TextEncoder().encode(s);}
+
+function _buildZip(files){
+  const entries=[];let offset=0;const parts=[];
+  for(const[name,content]of Object.entries(files)){
+    const nb=_str(name),data=_str(content),crc=_crc32(data);
+    const local=_cat(new Uint8Array([0x50,0x4B,0x03,0x04]),_u16(20),_u16(0),_u16(0),_u16(0),_u16(0),_u32(crc),_u32(data.length),_u32(data.length),_u16(nb.length),_u16(0),nb,data);
+    entries.push({nb,crc,size:data.length,offset});offset+=local.length;parts.push(local);
+  }
+  const cdp=[];
+  for(const e of entries){const cd=_cat(new Uint8Array([0x50,0x4B,0x01,0x02]),_u16(20),_u16(20),_u16(0),_u16(0),_u16(0),_u32(e.crc),_u32(e.size),_u32(e.size),_u16(e.nb.length),_u16(0),_u16(0),_u16(0),_u16(0),_u32(0),_u32(e.offset),e.nb);cdp.push(cd);}
+  const cd=_cat(...cdp);
+  const eocd=_cat(new Uint8Array([0x50,0x4B,0x05,0x06]),_u16(0),_u16(0),_u16(entries.length),_u16(entries.length),_u32(cd.length),_u32(offset),_u16(0));
+  return _cat(...parts,cd,eocd);
+}
+
+function _xmlEsc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');}
+
+function _buildDocx(titleText, pages, style) {
+  let body = '';
+
+  // Título
+  body += `<w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="48"/></w:rPr><w:t>${_xmlEsc(titleText)}</w:t></w:r></w:p>`;
+
+  pages.forEach((lines, idx) => {
+    // Separador de página
+    body += `<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="4" w:space="4" w:color="B8972A"/></w:pBdr><w:spacing w:before="240" w:after="80"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="B8972A"/><w:sz w:val="18"/></w:rPr><w:t>Página ${idx + 1}</w:t></w:r></w:p>`;
+
+    lines.forEach(line => {
+      if (!line.trim()) return;
+      const esc = _xmlEsc(line);
+      const isHeading = style === 'headings' && line.length < 80 && line.trim() === line.trim().toUpperCase() && line.trim().length > 3;
+      if (isHeading) {
+        body += `<w:p><w:pPr><w:pStyle w:val="Heading2"/><w:spacing w:before="200" w:after="80"/></w:pPr><w:r><w:t>${esc}</w:t></w:r></w:p>`;
+      } else {
+        body += `<w:p><w:pPr><w:spacing w:after="60"/></w:pPr><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t xml:space="preserve">${esc}</w:t></w:r></w:p>`;
+      }
+    });
+  });
+
+  const files = {
+    '_rels/.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`,
+    'word/_rels/document.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
+    'word/document.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>`,
+    'word/styles.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:styleId="Normal"><w:name w:val="Normal"/><w:rPr><w:sz w:val="22"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:pPr><w:jc w:val="center"/><w:spacing w:after="400"/></w:pPr><w:rPr><w:b/><w:sz w:val="52"/><w:color w:val="1a1d27"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:before="200" w:after="100"/></w:pPr><w:rPr><w:b/><w:sz w:val="28"/><w:color w:val="4f6ef7"/></w:rPr></w:style></w:styles>`,
+    '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>`
+  };
+
+  return _buildZip(files);
+}
+
+async function doToWord() {
+  const key = 'to_word';
+  loading(key, true); setResult(key, '');
+  const ptxt = document.getElementById('word-ptxt');
+  const pw   = document.getElementById('word-pw'); pw.style.display = 'block';
+  const pb   = document.getElementById('word-pb'); pb.style.width = '0%';
+
+  try {
+    const style  = document.getElementById('word-style').value;
+    const ab     = await readAB(store[key][0]);
+    const pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(ab) }).promise;
+    const total  = pdfDoc.numPages;
+    const pages  = [];
+    let hasImages = false;
+    let totalChars = 0;
+
+    for (let i = 1; i <= total; i++) {
+      ptxt.textContent = `Extraindo texto — página ${i} de ${total}…`;
+      pb.style.width = ((i - 1) / total * 100) + '%';
+
+      const page    = await pdfDoc.getPage(i);
+      const content = await page.getTextContent();
+
+      // Detecta se a página tem imagens (operadores de imagem no stream)
+      if (!hasImages) {
+        try {
+          const ops = await page.getOperatorList();
+          // OPS.paintImageXObject = 85, paintInlineImageXObject = 86
+          if (ops.fnArray.some(fn => fn === 85 || fn === 86)) hasImages = true;
+        } catch(e) { /* ignora se não conseguir inspecionar */ }
+      }
+
+      // Agrupa itens por linha (posição Y)
+      const rows = {};
+      content.items.forEach(item => {
+        if (!item.str) return;
+        const y = Math.round(item.transform[5] / 5) * 5;
+        if (!rows[y]) rows[y] = [];
+        rows[y].push(item.str);
+      });
+      const lines = Object.keys(rows)
+        .map(Number).sort((a, b) => b - a)
+        .map(y => rows[y].join(' ').trim())
+        .filter(l => l.length > 0);
+
+      totalChars += lines.join('').length;
+      pages.push(lines);
+    }
+
+    pb.style.width = '90%';
+    ptxt.textContent = 'Gerando arquivo .docx…';
+
+    const titleText = store[key][0].name.replace(/\.pdf$/i, '');
+    const zipBytes  = _buildDocx(titleText, pages, style);
+
+    pb.style.width = '100%';
+
+    const fname = titleText + '.docx';
+    const url   = URL.createObjectURL(new Blob([zipBytes], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    }));
+
+    // Monta avisos contextuais
+    let warnings = '';
+    if (hasImages) {
+      warnings += `<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.4);border-radius:7px;padding:10px 13px;margin-bottom:10px;font-size:12px;color:#fde68a;display:flex;gap:8px;align-items:flex-start">
+        <span>⚠️</span>
+        <span>Este PDF contém <b>imagens</b> que <b>não foram convertidas</b>. O documento Word gerado contém apenas o texto extraído.</span>
+      </div>`;
+    }
+    if (totalChars === 0) {
+      warnings += `<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.4);border-radius:7px;padding:10px 13px;margin-bottom:10px;font-size:12px;color:#fca5a5;display:flex;gap:8px;align-items:flex-start">
+        <span>❌</span>
+        <span>Nenhum texto foi encontrado. Este PDF pode ser um <b>documento escaneado</b> (composto apenas por imagens). A conversão para Word não é possível nesse caso.</span>
+      </div>`;
+    }
+
+    setResult(key, `<div class="rarea">
+      <h4>✅ Documento Word gerado</h4>
+      ${warnings}
+      <div class="ditem">
+        <span>📝</span>
+        <span>${fname}</span>
+        <a href="${url}" download="${fname}">⬇️ Baixar .docx</a>
+      </div>
+    </div>`);
+
+    const msg = totalChars === 0 ? '⚠️ Nenhum texto encontrado no PDF' : '✅ Word gerado com sucesso!';
+    toast(msg, totalChars === 0 ? '' : 'ok');
+
+  } catch(e) {
+    setResult(key, errBox(e.message));
+    toast('❌ Erro ao converter', 'er');
+  }
+
+  pw.style.display = 'none';
+  loading(key, false);
+}
+
+// ── PDF → PPTX ───────────────────────────────────────────────────────────────
+
+// ZIP builder binário (suporta JPEG embutido)
+function _buildZipBinary(textFiles, binaryEntries) {
+  const enc = new TextEncoder();
+  const entries = []; let offset = 0; const parts = [];
+  const addEntry = (name, data) => {
+    const nb = enc.encode(name), crc = _crc32(data);
+    const local = _cat(new Uint8Array([0x50,0x4B,0x03,0x04]),_u16(20),_u16(0),_u16(0),_u16(0),_u16(0),_u32(crc),_u32(data.length),_u32(data.length),_u16(nb.length),_u16(0),nb,data);
+    entries.push({nb,crc,size:data.length,offset}); offset+=local.length; parts.push(local);
+  };
+  const binKeys = new Set(binaryEntries.map(b=>b.key));
+  for(const[name,content] of Object.entries(textFiles)) if(!binKeys.has(name)) addEntry(name, enc.encode(content));
+  for(const{key,b64} of binaryEntries) addEntry(key, Uint8Array.from(atob(b64), c=>c.charCodeAt(0)));
+  const cdp=[];
+  for(const e of entries) cdp.push(_cat(new Uint8Array([0x50,0x4B,0x01,0x02]),_u16(20),_u16(20),_u16(0),_u16(0),_u16(0),_u32(e.crc),_u32(e.size),_u32(e.size),_u16(e.nb.length),_u16(0),_u16(0),_u16(0),_u16(0),_u32(0),_u32(e.offset),e.nb));
+  const cd=_cat(...cdp);
+  const eocd=_cat(new Uint8Array([0x50,0x4B,0x05,0x06]),_u16(0),_u16(0),_u16(entries.length),_u16(entries.length),_u32(cd.length),_u32(offset),_u16(0));
+  return _cat(...parts,cd,eocd);
+}
+
+async function doToPpt() {
+  const key = 'to_ppt';
+  loading(key, true); setResult(key, '');
+  const ptxt = document.getElementById('ppt-ptxt');
+  const pw   = document.getElementById('ppt-pw'); pw.style.display = 'block';
+  const pb   = document.getElementById('ppt-pb'); pb.style.width = '0%';
+  try {
+    const scale  = parseFloat(document.getElementById('ppt-scale').value);
+    const ab     = await readAB(store[key][0]);
+    const pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(ab) }).promise;
+    const total  = pdfDoc.numPages;
+    const slides = [];
+
+    for (let i = 1; i <= total; i++) {
+      ptxt.textContent = `Renderizando página ${i} de ${total}…`;
+      pb.style.width = ((i-1)/total*100) + '%';
+      const page = await pdfDoc.getPage(i);
+      const vp   = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = vp.width; canvas.height = vp.height;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvasContext: ctx, viewport: vp }).promise;
+      const b64 = canvas.toDataURL('image/jpeg', 0.92).split(',')[1];
+      const origVp = page.getViewport({ scale: 1 });
+      slides.push({ b64, w: origVp.width, h: origVp.height });
+    }
+
+    ptxt.textContent = 'Montando arquivo .pptx…';
+    pb.style.width = '95%';
+
+    // Dimensões do primeiro slide em EMU (1 pt = 12700 EMU)
+    const cxEmu = Math.round(slides[0].w * 12700);
+    const cyEmu = Math.round(slides[0].h * 12700);
+
+    const textFiles = {};
+    const binEntries = [];
+
+    // [Content_Types].xml
+    const slideCTs = slides.map((_,i) =>
+      `<Override PartName="/ppt/slides/slide${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`
+    ).join('');
+    textFiles['[Content_Types].xml'] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="jpeg" ContentType="image/jpeg"/><Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/><Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/><Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>${slideCTs}</Types>`;
+
+    textFiles['_rels/.rels'] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/></Relationships>`;
+
+    textFiles['ppt/slideMasters/slideMaster1.xml'] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></a:xfrm></p:grpSpPr></p:spTree></p:cSld><p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/><p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rId1"/></p:sldLayoutIdLst><p:txStyles><p:titleStyle/><p:bodyStyle/><p:otherStyle/></p:txStyles></p:sldMaster>`;
+
+    textFiles['ppt/slideMasters/_rels/slideMaster1.xml.rels'] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/></Relationships>`;
+
+    textFiles['ppt/slideLayouts/slideLayout1.xml'] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" type="blank"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></a:xfrm></p:grpSpPr></p:spTree></p:cSld></p:sldLayout>`;
+
+    textFiles['ppt/slideLayouts/_rels/slideLayout1.xml.rels'] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/></Relationships>`;
+
+    const sldIdList = slides.map((_,i) => `<p:sldId id="${256+i}" r:id="rId${i+1}"/>`).join('');
+    const presRels  = slides.map((_,i) => `<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide${i+1}.xml"/>`).join('') +
+      `<Relationship Id="rId${slides.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>`;
+
+    textFiles['ppt/presentation.xml'] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId${slides.length+1}"/></p:sldMasterIdLst><p:sldIdLst>${sldIdList}</p:sldIdLst><p:sldSz cx="${cxEmu}" cy="${cyEmu}" type="custom"/><p:notesSz cx="6858000" cy="9144000"/></p:presentation>`;
+    textFiles['ppt/_rels/presentation.xml.rels'] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${presRels}</Relationships>`;
+
+    for (let i = 0; i < slides.length; i++) {
+      const sl = slides[i];
+      const cx = Math.round(sl.w * 12700), cy = Math.round(sl.h * 12700);
+      const imgName = `img${i+1}.jpeg`;
+      binEntries.push({ key: `ppt/media/${imgName}`, b64: sl.b64 });
+
+      textFiles[`ppt/slides/slide${i+1}.xml`] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/><a:chOff x="0" y="0"/><a:chExt cx="${cx}" cy="${cy}"/></a:xfrm></p:grpSpPr><p:pic><p:nvPicPr><p:cNvPr id="2" name="${imgName}"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic></p:spTree></p:cSld></p:sld>`;
+
+      textFiles[`ppt/slides/_rels/slide${i+1}.xml.rels`] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${imgName}"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/></Relationships>`;
+    }
+
+    const zipBytes = _buildZipBinary(textFiles, binEntries);
+    pb.style.width = '100%';
+
+    const fname = store[key][0].name.replace(/\.pdf$/i, '') + '.pptx';
+    const url   = URL.createObjectURL(new Blob([zipBytes], {
+      type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    }));
+
+    setResult(key, `<div class="rarea">
+      <h4>✅ PowerPoint gerado</h4>
+      <div style="background:rgba(79,110,247,.08);border:1px solid rgba(79,110,247,.3);border-radius:7px;padding:10px 13px;margin-bottom:10px;font-size:12px;color:#a5b4fc;display:flex;gap:8px">
+        <span>ℹ️</span>
+        <span>${total} slide${total>1?'s':''} gerado${total>1?'s':''} — cada página do PDF virou um slide com visual preservado.</span>
+      </div>
+      <div class="ditem">
+        <span>📊</span><span>${fname}</span>
+        <a href="${url}" download="${fname}">⬇️ Baixar .pptx</a>
+      </div>
+    </div>`);
+    toast(`✅ ${total} slide${total>1?'s':''} gerado${total>1?'s':''}!`, 'ok');
+  } catch(e) {
+    setResult(key, errBox(e.message));
+    toast('❌ Erro ao converter', 'er');
+  }
   pw.style.display = 'none';
   loading(key, false);
 }
