@@ -159,6 +159,147 @@ select option{background:#1a1d27}
 /* Progress */
 .prog-wrap{background:var(--surf2);border-radius:20px;height:6px;overflow:hidden;margin-top:8px}
 .prog-bar{height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2));border-radius:20px;transition:width .3s}
+
+/* ── Editor visual ──────────────────────────────────────────────────── */
+#p-editor { padding: 0 !important; display: none; flex-direction: column; height: 100%; overflow: hidden; }
+#p-editor.on { display: flex; }
+
+/* toolbar */
+.ed-toolbar {
+  background: var(--surf);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.ed-sep { width: 1px; height: 26px; background: var(--border); margin: 0 4px; }
+.ed-tool {
+  width: 32px; height: 32px; border-radius: 7px;
+  border: 1px solid transparent;
+  background: none; cursor: pointer; font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  transition: .15s; color: var(--text); position: relative;
+}
+.ed-tool:hover { background: var(--surf2); border-color: var(--border); }
+.ed-tool.active { background: var(--glow); border-color: var(--acc); }
+.ed-tool[title]:hover::after {
+  content: attr(title);
+  position: absolute; bottom: -28px; left: 50%; transform: translateX(-50%);
+  background: var(--dark, #111); color: #fff; font-size: 10px; padding: 2px 6px;
+  border-radius: 4px; white-space: nowrap; z-index: 99; pointer-events: none;
+}
+.ed-color { width: 26px; height: 26px; border-radius: 5px; border: 2px solid var(--border); cursor: pointer; padding: 0; }
+.ed-range { width: 80px; accent-color: var(--acc); }
+.ed-label { font-size: 11px; color: var(--muted); }
+.ed-select { background: var(--surf2); border: 1px solid var(--border); color: var(--text); font-size: 11px; border-radius: 6px; padding: 3px 6px; }
+
+/* editor body */
+.ed-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* thumbnails */
+.ed-thumbs {
+  width: 100px; min-width: 100px;
+  background: var(--surf);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ed-thumb-wrap {
+  cursor: pointer;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  overflow: hidden;
+  transition: .15s;
+  background: var(--surf2);
+}
+.ed-thumb-wrap:hover { border-color: var(--acc); }
+.ed-thumb-wrap.active { border-color: var(--acc); box-shadow: 0 0 0 2px var(--glow); }
+.ed-thumb-canvas { width: 100%; display: block; }
+.ed-thumb-label { font-size: 10px; color: var(--muted); text-align: center; padding: 2px 0 3px; }
+
+/* canvas area */
+.ed-canvas-wrap {
+  flex: 1;
+  overflow: auto;
+  background: #3a3a3a;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 20px;
+}
+.ed-canvas-stack {
+  position: relative;
+  box-shadow: 0 4px 24px rgba(0,0,0,.5);
+}
+#ed-base-canvas { display: block; }
+#ed-draw-canvas {
+  position: absolute;
+  top: 0; left: 0;
+  display: block;
+}
+
+/* text input overlay */
+.ed-text-input {
+  position: absolute;
+  background: transparent;
+  border: 1px dashed var(--acc);
+  outline: none;
+  color: #000;
+  font-family: Arial, sans-serif;
+  resize: both;
+  overflow: hidden;
+  min-width: 80px;
+  min-height: 24px;
+  padding: 2px 4px;
+  z-index: 10;
+  cursor: move;
+}
+
+/* page info bar */
+.ed-pagebar {
+  background: var(--surf);
+  border-top: 1px solid var(--border);
+  padding: 6px 14px;
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.ed-pagebar b { color: var(--text); }
+
+/* drop zone inicial do editor */
+#ed-dropzone {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  text-align: center;
+  padding: 40px;
+  border: 2px dashed var(--border);
+  border-radius: var(--r, 12px);
+  margin: 20px;
+  cursor: pointer;
+  transition: .2s;
+}
+#ed-dropzone:hover { border-color: var(--acc); background: var(--glow); }
+#ed-dropzone .di { font-size: 42px; margin-bottom: 12px; }
+#ed-dropzone h3 { font-size: 14px; font-weight: 600; margin-bottom: 5px; color: var(--text); }
+
 </style>
 </head>
 <body>
@@ -177,6 +318,7 @@ select option{background:#1a1d27}
     <button class="tbtn" onclick="show('split')"><div class="ic" style="background:rgba(124,58,237,.15)">✂️</div>Dividir PDF</button>
     <button class="tbtn" onclick="show('rotate')"><div class="ic" style="background:rgba(245,158,11,.15)">🔄</div>Rotacionar páginas</button>
     <button class="tbtn" onclick="show('compress')"><div class="ic" style="background:rgba(79,110,247,.15)">📦</div>Compactar PDF</button>
+    <button class="tbtn" onclick="show('editor')"><div class="ic" style="background:rgba(236,72,153,.15)">✏️</div>Editar PDF</button>
     <div class="sb-label">Converter</div>
     <button class="tbtn" onclick="show('pdfa')"><div class="ic" style="background:rgba(34,197,94,.15)">🏅</div>Converter para PDF/A</button>
     <button class="tbtn" onclick="show('to_img')"><div class="ic" style="background:rgba(245,158,11,.15)">🖼️</div>PDF → Imagens</button>
@@ -207,6 +349,7 @@ select option{background:#1a1d27}
           <div class="wchip" onclick="show('split')"><div class="wci">✂️</div>Dividir</div>
           <div class="wchip" onclick="show('rotate')"><div class="wci">🔄</div>Rotacionar</div>
           <div class="wchip" onclick="show('compress')"><div class="wci">📦</div>Compactar</div>
+          <div class="wchip" onclick="show('editor')"><div class="wci">✏️</div>Editar PDF</div>
           <div class="wchip" onclick="show('pdfa')"><div class="wci">🏅</div>PDF/A</div>
           <div class="wchip" onclick="show('to_img')"><div class="wci">🖼️</div>→ Imagens</div>
           <div class="wchip" onclick="show('to_excel')"><div class="wci">📊</div>→ Excel</div>
@@ -572,6 +715,111 @@ select option{background:#1a1d27}
       <div class="prog-wrap" id="compress-pw" style="display:none"><div class="prog-bar" id="compress-pb" style="width:0%"></div></div>
       <div id="res-compress"></div>
     </div>
+
+    <!-- EDITOR VISUAL -->
+    <div id="p-editor" class="panel">
+
+      <!-- Drop zone inicial (antes de carregar um PDF) -->
+      <div id="ed-dropzone"
+           onclick="document.getElementById('fi-editor').click()"
+           ondrop="edDrop(event)" ondragover="dov(event)" ondragleave="dol(event)">
+        <input type="file" id="fi-editor" accept=".pdf" style="display:none" onchange="edLoad(this.files[0])">
+        <div class="di">✏️</div>
+        <h3>Selecione ou arraste um PDF para editar</h3>
+        <p>Desenhe, escreva, marque e salve o PDF editado</p>
+      </div>
+
+      <!-- Interface de edição (oculta até carregar PDF) -->
+      <div id="ed-ui" style="display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden;">
+
+        <!-- Toolbar -->
+        <div class="ed-toolbar">
+          <!-- Ferramentas principais -->
+          <button class="ed-tool active" id="et-pen"       onclick="edTool('pen')"       title="Caneta livre">✏️</button>
+          <button class="ed-tool"        id="et-marker"    onclick="edTool('marker')"    title="Marca-texto">🖍️</button>
+          <button class="ed-tool"        id="et-text"      onclick="edTool('text')"      title="Inserir texto">T</button>
+          <button class="ed-tool"        id="et-rect"      onclick="edTool('rect')"      title="Retângulo">▭</button>
+          <button class="ed-tool"        id="et-ellipse"   onclick="edTool('ellipse')"   title="Elipse">◯</button>
+          <button class="ed-tool"        id="et-arrow"     onclick="edTool('arrow')"     title="Seta">↗</button>
+          <button class="ed-tool"        id="et-eraser"    onclick="edTool('eraser')"    title="Borracha">🗑️</button>
+
+          <div class="ed-sep"></div>
+
+          <!-- Cor -->
+          <span class="ed-label">Cor</span>
+          <input type="color" class="ed-color" id="ed-color" value="#e63946" title="Cor">
+
+          <!-- Espessura -->
+          <span class="ed-label">Esp.</span>
+          <input type="range" class="ed-range" id="ed-size" min="1" max="30" value="3" title="Espessura">
+
+          <!-- Fonte (para texto) -->
+          <span class="ed-label" id="ed-font-label" style="display:none">Fonte</span>
+          <select class="ed-select" id="ed-font-size" style="display:none">
+            <option value="12">12</option>
+            <option value="14">14</option>
+            <option value="16" selected>16</option>
+            <option value="20">20</option>
+            <option value="24">24</option>
+            <option value="32">32</option>
+            <option value="48">48</option>
+          </select>
+
+          <div class="ed-sep"></div>
+
+          <!-- Histórico -->
+          <button class="ed-tool" onclick="edUndo()" title="Desfazer (Ctrl+Z)">↩️</button>
+          <button class="ed-tool" onclick="edRedo()" title="Refazer (Ctrl+Y)">↪️</button>
+          <button class="ed-tool" onclick="edClearPage()" title="Limpar página">🧹</button>
+
+          <div class="ed-sep"></div>
+
+          <!-- Zoom -->
+          <button class="ed-tool" onclick="edZoom(-0.25)" title="Zoom -">🔍</button>
+          <span class="ed-label" id="ed-zoom-lbl">100%</span>
+          <button class="ed-tool" onclick="edZoom(+0.25)" title="Zoom +">🔎</button>
+
+          <div class="ed-sep" style="margin-left:auto"></div>
+
+          <!-- Salvar -->
+          <button class="btn btn-p" style="padding:6px 14px;font-size:12px" onclick="edSave()">
+            💾 Salvar PDF
+          </button>
+        </div>
+
+        <!-- Corpo: miniaturas + canvas -->
+        <div class="ed-body">
+
+          <!-- Miniaturas -->
+          <div class="ed-thumbs" id="ed-thumbs"></div>
+
+          <!-- Canvas principal -->
+          <div class="ed-canvas-wrap" id="ed-canvas-wrap">
+            <div class="ed-canvas-stack" id="ed-canvas-stack">
+              <canvas id="ed-base-canvas"></canvas>
+              <canvas id="ed-draw-canvas"
+                onmousedown="edDown(event)" onmousemove="edMove(event)"
+                onmouseup="edUp(event)" onmouseleave="edUp(event)"
+                ontouchstart="edTouchStart(event)" ontouchmove="edTouchMove(event)"
+                ontouchend="edUp(event)">
+              </canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Barra inferior de página -->
+        <div class="ed-pagebar">
+          <button class="ed-tool" style="width:24px;height:24px;font-size:13px" onclick="edNavPage(-1)">◀</button>
+          <span>Página <b id="ed-page-cur">1</b> de <b id="ed-page-tot">1</b></span>
+          <button class="ed-tool" style="width:24px;height:24px;font-size:13px" onclick="edNavPage(+1)">▶</button>
+          <span style="margin-left:auto">
+            <span id="ed-saving" style="color:var(--ok);display:none">✅ Salvo!</span>
+            <span id="ed-filename" style="color:var(--muted)"></span>
+          </span>
+        </div>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -1423,6 +1671,487 @@ async function doToPpt() {
   pw.style.display = 'none';
   loading(key, false);
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// EDITOR VISUAL DE PDF
+// ════════════════════════════════════════════════════════════════════════
+const ED = {
+  pdfDoc:    null,   // pdfjs document
+  pdfBytes:  null,   // Uint8Array original
+  file:      null,   // File object
+  pageCount: 0,
+  curPage:   1,
+  scale:     1.5,
+  tool:      'pen',
+  color:     '#e63946',
+  size:      3,
+  drawing:   false,
+  lastX:     0,
+  lastY:     0,
+  // Anotações: array de páginas, cada uma com array de strokes/objects
+  annotations: [],
+  undoStack:   [],
+  redoStack:   [],
+  startX: 0, startY: 0,
+  shapeSnap: null,    // canvas snapshot antes de desenhar shape
+  activeTextEl: null,
+};
+
+// ── Carregamento do PDF ────────────────────────────────────────────────
+async function edLoad(file) {
+  if (!file) return;
+  ED.file = file;
+  document.getElementById('ed-dropzone').style.display = 'none';
+  const ui = document.getElementById('ed-ui');
+  ui.style.display = 'flex';
+  document.getElementById('ed-filename').textContent = file.name;
+
+  const ab = await file.arrayBuffer();
+  ED.pdfBytes = new Uint8Array(ab);
+  ED.pdfDoc   = await pdfjsLib.getDocument({ data: ED.pdfBytes }).promise;
+  ED.pageCount = ED.pdfDoc.numPages;
+  ED.annotations = Array.from({ length: ED.pageCount }, () => []);
+  ED.undoStack   = Array.from({ length: ED.pageCount }, () => []);
+  ED.redoStack   = Array.from({ length: ED.pageCount }, () => []);
+  document.getElementById('ed-page-tot').textContent = ED.pageCount;
+
+  await edBuildThumbs();
+  await edRenderPage(1);
+}
+
+function edDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('over');
+  const file = e.dataTransfer.files[0];
+  if (file && file.name.endsWith('.pdf')) edLoad(file);
+}
+
+// ── Miniaturas ─────────────────────────────────────────────────────────
+async function edBuildThumbs() {
+  const container = document.getElementById('ed-thumbs');
+  container.innerHTML = '';
+  for (let i = 1; i <= ED.pageCount; i++) {
+    const page = await ED.pdfDoc.getPage(i);
+    const vp   = page.getViewport({ scale: 0.18 });
+    const wrap = document.createElement('div');
+    wrap.className = 'ed-thumb-wrap' + (i === 1 ? ' active' : '');
+    wrap.dataset.page = i;
+    wrap.onclick = () => edRenderPage(i);
+    const c = document.createElement('canvas');
+    c.className = 'ed-thumb-canvas';
+    c.width  = vp.width;
+    c.height = vp.height;
+    await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+    const lbl = document.createElement('div');
+    lbl.className = 'ed-thumb-label';
+    lbl.textContent = i;
+    wrap.appendChild(c);
+    wrap.appendChild(lbl);
+    container.appendChild(wrap);
+  }
+}
+
+function edUpdateThumbActive(pageNum) {
+  document.querySelectorAll('.ed-thumb-wrap').forEach(w => {
+    w.classList.toggle('active', parseInt(w.dataset.page) === pageNum);
+  });
+  // scroll thumb into view
+  const active = document.querySelector('.ed-thumb-wrap.active');
+  if (active) active.scrollIntoView({ block: 'nearest' });
+}
+
+// ── Renderização da página ─────────────────────────────────────────────
+async function edRenderPage(pageNum) {
+  // Commit qualquer texto aberto
+  edCommitText();
+  // Salva anotações do canvas atual antes de trocar
+  edSaveCurrentToAnnotations();
+
+  ED.curPage = pageNum;
+  document.getElementById('ed-page-cur').textContent = pageNum;
+  edUpdateThumbActive(pageNum);
+
+  const page = await ED.pdfDoc.getPage(pageNum);
+  const vp   = page.getViewport({ scale: ED.scale });
+
+  const base = document.getElementById('ed-base-canvas');
+  const draw = document.getElementById('ed-draw-canvas');
+  const stack = document.getElementById('ed-canvas-stack');
+  base.width  = draw.width  = vp.width;
+  base.height = draw.height = vp.height;
+  stack.style.width  = vp.width  + 'px';
+  stack.style.height = vp.height + 'px';
+
+  const ctx = base.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, vp.width, vp.height);
+  await page.render({ canvasContext: ctx, viewport: vp }).promise;
+
+  // Repõe anotações desta página
+  edRedrawAnnotations(pageNum);
+  edUpdateCursor();
+}
+
+// ── Anotações ─────────────────────────────────────────────────────────
+function edSaveCurrentToAnnotations() {
+  if (!ED.pdfDoc) return;
+  const draw = document.getElementById('ed-draw-canvas');
+  if (!draw) return;
+  // Nada a fazer — as anotações já estão em ED.annotations[pageIdx]
+}
+
+function edRedrawAnnotations(pageNum) {
+  const draw = document.getElementById('ed-draw-canvas');
+  const ctx  = draw.getContext('2d');
+  ctx.clearRect(0, 0, draw.width, draw.height);
+  const anns = ED.annotations[pageNum - 1] || [];
+  anns.forEach(a => edDrawAnnotation(ctx, a));
+}
+
+function edDrawAnnotation(ctx, a) {
+  ctx.save();
+  if (a.type === 'path') {
+    ctx.strokeStyle = a.color;
+    ctx.lineWidth   = a.size;
+    ctx.lineCap     = 'round';
+    ctx.lineJoin    = 'round';
+    if (a.marker) ctx.globalAlpha = 0.35;
+    ctx.beginPath();
+    a.points.forEach((pt, i) => i === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y));
+    ctx.stroke();
+  } else if (a.type === 'rect') {
+    ctx.strokeStyle = a.color;
+    ctx.lineWidth   = a.size;
+    ctx.strokeRect(a.x, a.y, a.w, a.h);
+    if (a.fill) { ctx.fillStyle = a.color; ctx.globalAlpha = 0.15; ctx.fillRect(a.x, a.y, a.w, a.h); }
+  } else if (a.type === 'ellipse') {
+    ctx.strokeStyle = a.color;
+    ctx.lineWidth   = a.size;
+    ctx.beginPath();
+    ctx.ellipse(a.cx, a.cy, Math.abs(a.rx), Math.abs(a.ry), 0, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (a.type === 'arrow') {
+    edDrawArrow(ctx, a.x1, a.y1, a.x2, a.y2, a.color, a.size);
+  } else if (a.type === 'text') {
+    ctx.fillStyle = a.color;
+    ctx.font      = `${a.size}px Arial`;
+    a.lines.forEach((line, i) => ctx.fillText(line, a.x, a.y + i * (a.size + 4)));
+  }
+  ctx.restore();
+}
+
+function edDrawArrow(ctx, x1, y1, x2, y2, color, size) {
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  const hs = Math.max(size * 4, 12);
+  ctx.strokeStyle = color;
+  ctx.fillStyle   = color;
+  ctx.lineWidth   = size;
+  ctx.lineCap     = 'round';
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - hs * Math.cos(angle - Math.PI/6), y2 - hs * Math.sin(angle - Math.PI/6));
+  ctx.lineTo(x2 - hs * Math.cos(angle + Math.PI/6), y2 - hs * Math.sin(angle + Math.PI/6));
+  ctx.closePath(); ctx.fill();
+}
+
+// ── Ferramentas ────────────────────────────────────────────────────────
+function edTool(name) {
+  edCommitText();
+  ED.tool = name;
+  document.querySelectorAll('.ed-tool[id^="et-"]').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('et-' + name);
+  if (btn) btn.classList.add('active');
+  const isText = name === 'text';
+  document.getElementById('ed-font-label').style.display    = isText ? '' : 'none';
+  document.getElementById('ed-font-size').style.display     = isText ? '' : 'none';
+  edUpdateCursor();
+}
+
+function edUpdateCursor() {
+  const draw = document.getElementById('ed-draw-canvas');
+  if (!draw) return;
+  const cursors = { pen:'crosshair', marker:'crosshair', text:'text', rect:'crosshair', ellipse:'crosshair', arrow:'crosshair', eraser:'cell' };
+  draw.style.cursor = cursors[ED.tool] || 'default';
+}
+
+function edZoom(delta) {
+  ED.scale = Math.max(0.5, Math.min(4, ED.scale + delta));
+  document.getElementById('ed-zoom-lbl').textContent = Math.round(ED.scale * 100) + '%';
+  edRenderPage(ED.curPage);
+}
+
+function edNavPage(delta) {
+  const next = ED.curPage + delta;
+  if (next >= 1 && next <= ED.pageCount) edRenderPage(next);
+}
+
+// ── Eventos de desenho ─────────────────────────────────────────────────
+let _curPath = null;
+
+function edGetPos(e, canvas) {
+  const r = canvas.getBoundingClientRect();
+  const x = (e.clientX ?? e.touches[0].clientX) - r.left;
+  const y = (e.clientY ?? e.touches[0].clientY) - r.top;
+  return { x, y };
+}
+
+function edDown(e) {
+  if (!ED.pdfDoc) return;
+  e.preventDefault();
+  const draw = document.getElementById('ed-draw-canvas');
+  const pos  = edGetPos(e, draw);
+  ED.drawing = true;
+  ED.startX  = pos.x;
+  ED.startY  = pos.y;
+  ED.lastX   = pos.x;
+  ED.lastY   = pos.y;
+  ED.color   = document.getElementById('ed-color').value;
+  ED.size    = parseInt(document.getElementById('ed-size').value);
+
+  if (ED.tool === 'text') {
+    edCommitText();
+    edPlaceText(pos.x, pos.y);
+    ED.drawing = false;
+    return;
+  }
+  if (ED.tool === 'eraser') { edEraseAt(pos.x, pos.y); return; }
+  if (['rect','ellipse','arrow'].includes(ED.tool)) {
+    // snapshot para shape preview
+    ED.shapeSnap = draw.getContext('2d').getImageData(0, 0, draw.width, draw.height);
+    return;
+  }
+  // path-based tools (pen, marker)
+  _curPath = { type:'path', color: ED.color, size: ED.size, marker: ED.tool==='marker', points:[{x:pos.x, y:pos.y}] };
+}
+
+function edMove(e) {
+  if (!ED.drawing || !ED.pdfDoc) return;
+  e.preventDefault();
+  const draw = document.getElementById('ed-draw-canvas');
+  const ctx  = draw.getContext('2d');
+  const pos  = edGetPos(e, draw);
+
+  if (ED.tool === 'eraser') { edEraseAt(pos.x, pos.y); ED.lastX=pos.x; ED.lastY=pos.y; return; }
+
+  if (['rect','ellipse','arrow'].includes(ED.tool)) {
+    ctx.putImageData(ED.shapeSnap, 0, 0);
+    ctx.save();
+    ctx.strokeStyle = ED.color; ctx.lineWidth = ED.size;
+    if (ED.tool === 'rect') {
+      ctx.strokeRect(ED.startX, ED.startY, pos.x - ED.startX, pos.y - ED.startY);
+    } else if (ED.tool === 'ellipse') {
+      ctx.beginPath();
+      ctx.ellipse(
+        (ED.startX+pos.x)/2, (ED.startY+pos.y)/2,
+        Math.abs(pos.x-ED.startX)/2, Math.abs(pos.y-ED.startY)/2,
+        0, 0, Math.PI*2
+      );
+      ctx.stroke();
+    } else {
+      edDrawArrow(ctx, ED.startX, ED.startY, pos.x, pos.y, ED.color, ED.size);
+    }
+    ctx.restore();
+    return;
+  }
+
+  // pen / marker
+  if (_curPath) {
+    _curPath.points.push({ x: pos.x, y: pos.y });
+    ctx.save();
+    ctx.strokeStyle = ED.color; ctx.lineWidth = ED.size;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    if (ED.tool === 'marker') ctx.globalAlpha = 0.35;
+    ctx.beginPath(); ctx.moveTo(ED.lastX, ED.lastY); ctx.lineTo(pos.x, pos.y); ctx.stroke();
+    ctx.restore();
+  }
+  ED.lastX = pos.x; ED.lastY = pos.y;
+}
+
+function edUp(e) {
+  if (!ED.drawing) return;
+  ED.drawing = false;
+  const draw = document.getElementById('ed-draw-canvas');
+  const pos  = e.type.startsWith('touch')
+    ? { x: e.changedTouches[0].clientX - draw.getBoundingClientRect().left,
+        y: e.changedTouches[0].clientY - draw.getBoundingClientRect().top }
+    : edGetPos(e, draw);
+
+  if (['rect','ellipse','arrow'].includes(ED.tool)) {
+    let ann;
+    if (ED.tool === 'rect') {
+      ann = { type:'rect', x:ED.startX, y:ED.startY, w:pos.x-ED.startX, h:pos.y-ED.startY, color:ED.color, size:ED.size, fill:true };
+    } else if (ED.tool === 'ellipse') {
+      ann = { type:'ellipse', cx:(ED.startX+pos.x)/2, cy:(ED.startY+pos.y)/2, rx:(pos.x-ED.startX)/2, ry:(pos.y-ED.startY)/2, color:ED.color, size:ED.size };
+    } else {
+      ann = { type:'arrow', x1:ED.startX, y1:ED.startY, x2:pos.x, y2:pos.y, color:ED.color, size:ED.size };
+    }
+    edPushAnnotation(ann);
+    return;
+  }
+  if (_curPath && _curPath.points.length > 1) {
+    edPushAnnotation(_curPath);
+  }
+  _curPath = null;
+}
+
+// Touch events
+function edTouchStart(e) { edDown(e); }
+function edTouchMove(e)  { edMove(e); }
+
+// ── Anotação: push / undo / redo ──────────────────────────────────────
+function edPushAnnotation(ann) {
+  const idx = ED.curPage - 1;
+  ED.annotations[idx].push(ann);
+  ED.undoStack[idx].push(ann);
+  ED.redoStack[idx] = [];
+}
+
+function edUndo() {
+  const idx = ED.curPage - 1;
+  if (!ED.annotations[idx].length) return;
+  const last = ED.annotations[idx].pop();
+  ED.redoStack[idx].push(last);
+  edRedrawAnnotations(ED.curPage);
+}
+
+function edRedo() {
+  const idx = ED.curPage - 1;
+  if (!ED.redoStack[idx].length) return;
+  const item = ED.redoStack[idx].pop();
+  ED.annotations[idx].push(item);
+  edRedrawAnnotations(ED.curPage);
+}
+
+function edClearPage() {
+  const idx = ED.curPage - 1;
+  ED.annotations[idx] = [];
+  edRedrawAnnotations(ED.curPage);
+}
+
+// ── Borracha ──────────────────────────────────────────────────────────
+function edEraseAt(x, y) {
+  const r = ED.size * 6;
+  const idx = ED.curPage - 1;
+  const before = ED.annotations[idx].length;
+  ED.annotations[idx] = ED.annotations[idx].filter(a => {
+    if (a.type === 'path') {
+      return !a.points.some(pt => Math.hypot(pt.x - x, pt.y - y) < r);
+    }
+    if (a.type === 'text') return Math.hypot(a.x - x, a.y - y) > r * 2;
+    return true;
+  });
+  if (ED.annotations[idx].length !== before) edRedrawAnnotations(ED.curPage);
+}
+
+// ── Inserção de texto ─────────────────────────────────────────────────
+function edPlaceText(x, y) {
+  const stack = document.getElementById('ed-canvas-stack');
+  const inp   = document.createElement('textarea');
+  inp.className = 'ed-text-input';
+  inp.style.left = x + 'px';
+  inp.style.top  = y + 'px';
+  inp.style.color = document.getElementById('ed-color').value;
+  inp.style.fontSize = document.getElementById('ed-font-size').value + 'px';
+  inp.rows = 2;
+  stack.appendChild(inp);
+  inp.focus();
+  ED.activeTextEl = inp;
+
+  // Tornar arrastável
+  let ox=0, oy=0;
+  inp.addEventListener('mousedown', ev => {
+    if (ev.target !== inp) return;
+    ox = ev.clientX - inp.offsetLeft;
+    oy = ev.clientY - inp.offsetTop;
+    const mv = e2 => { inp.style.left=(e2.clientX-ox)+'px'; inp.style.top=(e2.clientY-oy)+'px'; };
+    const up = () => { document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); };
+    document.addEventListener('mousemove', mv);
+    document.addEventListener('mouseup', up);
+  });
+}
+
+function edCommitText() {
+  const inp = ED.activeTextEl;
+  if (!inp || !inp.value.trim()) {
+    if (inp) inp.remove();
+    ED.activeTextEl = null;
+    return;
+  }
+  const fontSize = parseInt(inp.style.fontSize);
+  const color    = inp.style.color;
+  const x = parseFloat(inp.style.left);
+  const y = parseFloat(inp.style.top) + fontSize;
+  const lines = inp.value.split('\n');
+  edPushAnnotation({ type:'text', x, y, color, size: fontSize, lines });
+  edRedrawAnnotations(ED.curPage);
+  inp.remove();
+  ED.activeTextEl = null;
+}
+
+// ── Salvar PDF com anotações ──────────────────────────────────────────
+async function edSave() {
+  if (!ED.pdfDoc || !ED.pdfBytes) return;
+  edCommitText();
+
+  // Renderiza anotações da página atual no canvas de draw antes de salvar
+  edRedrawAnnotations(ED.curPage);
+
+  toast('⏳ Gerando PDF...', '');
+  try {
+    const { PDFDocument: PDFD, rgb, degrees } = PDFLib;
+    const doc   = await PDFD.load(ED.pdfBytes, { ignoreEncryption: true });
+    const pages = doc.getPages();
+
+    for (let i = 0; i < pages.length; i++) {
+      const anns = ED.annotations[i] || [];
+      if (!anns.length) continue;
+
+      // Renderiza as anotações da página num canvas temporário
+      const pdfPage    = pages[i];
+      const { width: pw, height: ph } = pdfPage.getSize();
+      const pdfJsPage  = await ED.pdfDoc.getPage(i + 1);
+      const vp         = pdfJsPage.getViewport({ scale: ED.scale });
+
+      // Canvas temp para combinar base + anotações
+      const tmp     = document.createElement('canvas');
+      tmp.width     = vp.width;
+      tmp.height    = vp.height;
+      const tctx    = tmp.getContext('2d');
+      tctx.fillStyle = '#fff';
+      tctx.fillRect(0, 0, tmp.width, tmp.height);
+      await pdfJsPage.render({ canvasContext: tctx, viewport: vp }).promise;
+      anns.forEach(a => edDrawAnnotation(tctx, a));
+
+      // Converte para JPEG e embute como imagem cobrindo a página
+      const b64   = tmp.toDataURL('image/jpeg', 0.95).split(',')[1];
+      const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      const img   = await doc.embedJpg(bytes);
+      pdfPage.drawImage(img, { x:0, y:0, width:pw, height:ph });
+    }
+
+    const outBytes = await doc.save();
+    const fname    = ED.file.name.replace(/\.pdf$/i, '') + '_editado.pdf';
+    const url      = URL.createObjectURL(new Blob([outBytes], { type:'application/pdf' }));
+    const a        = document.createElement('a');
+    a.href         = url; a.download = fname; a.click();
+
+    document.getElementById('ed-saving').style.display = '';
+    setTimeout(() => document.getElementById('ed-saving').style.display = 'none', 3000);
+    toast('✅ PDF salvo!', 'ok');
+  } catch(e) {
+    toast('❌ Erro ao salvar: ' + e.message, 'er');
+  }
+}
+
+// ── Atalho de teclado ─────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+  if (!document.getElementById('p-editor').classList.contains('on')) return;
+  if (e.ctrlKey && e.key === 'z') { e.preventDefault(); edUndo(); }
+  if (e.ctrlKey && e.key === 'y') { e.preventDefault(); edRedo(); }
+  if (e.key === 'Escape') edCommitText();
+});
 
 </script>
 
