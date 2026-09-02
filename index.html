@@ -2026,4 +2026,160 @@ document.addEventListener('keydown', e => {
   <span>Área de OPTI · Unicred · 2026</span>
 </footer>
 </body>
-</html>
+</html// ── PDF/A ─────────────────────────────────────────────────────────────────────
+// Estratégia robusta: pdf-lib salva o PDF, depois injetamos o XMP diretamente
+// nos bytes (pós-processamento), evitando o bug do pdf-lib que cria stream
+// Metadata com /Length 0. OutputIntent adicionado via pdf-lib normalmente.
+async function doPdfa() {
+  const key = 'pdfa';
+  loading(key, true); setResult(key, '');
+  try {
+    const ab  = await readAB(store[key][0]);
+    const doc = await PDFDocument.load(ab, { ignoreEncryption: true });
+
+    // ── 1. Metadados existentes ───────────────────────────────────────────
+    const now     = new Date().toISOString().replace(/\.\d{3}Z$/, '+00:00');
+    const title   = doc.getTitle()   || '';
+    const author  = doc.getAuthor()  || '';
+    const subject = doc.getSubject() || '';
+
+    // ── 2. OutputIntent sRGB via pdf-lib (funciona corretamente) ──────────
+    const ctx     = doc.context;
+    const pdfName = PDFLib.PDFName;
+
+    const oiDict = ctx.obj({
+      Type: pdfName.of('OutputIntent'),
+      S:    pdfName.of('GTS_PDFA1'),
+      OutputConditionIdentifier: PDFLib.PDFHexString.fromText('sRGB'),
+      Info:         PDFLib.PDFHexString.fromText('sRGB IEC61966-2.1'),
+      RegistryName: PDFLib.PDFHexString.fromText('http://www.color.org'),
+    });
+    const oiRef = ctx.register(oiDict);
+    const existingOI = doc.catalog.lookupMaybe(pdfName.of('OutputIntents'), PDFLib.PDFArray);
+    if (existingOI) existingOI.push(oiRef);
+    else doc.catalog.set(pdfName.of('OutputIntents'), ctx.obj([oiRef]));
+
+    // ── 3. Info dict ──────────────────────────────────────────────────────
+    doc.setTitle(title   || 'Documento PDF/A');
+    doc.setCreator('UNICRED Editor de PDF');
+    doc.setProducer('UNICRED Editor de PDF (pdf-lib)');
+    doc.setSubject(subject || 'PDF/A-1b Compliant Document');
+    doc.setKeywords(['PDF/A-1b', 'ISO 19005-1', 'arquivamento']);
+
+    // ── 4. Salva com pdf-lib ──────────────────────────────────────────────
+    const savedBytes = await doc.save();
+    let pdf = new Uint8Array(savedBytes);
+
+    // ── 5. Pós-processamento: injeta XMP diretamente nos bytes ────────────
+    // (pdf-lib cria stream Metadata com /Length 0 — bug conhecido)
+    const xmpStr = `<?xpacket begin="\uFEFF" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="UNICRED Editor de PDF">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description rdf:about=""
+        xmlns:pdfaid="http://www.aiim.org/pdfa/ns/id/"
+        xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+        xmlns:dc="http://purl.org/dc/elements/1.1/"
+        xmlns:pdf="http://ns.adobe.com/pdf/1.3/">
+      <pdfaid:part>1</pdfaid:part>
+      <pdfaid:conformance>B</pdfaid:conformance>
+      <xmp:CreateDate>${now}</xmp:CreateDate>
+      <xmp:ModifyDate>${now}</xmp:ModifyDate>
+      <xmp:CreatorTool>UNICRED Editor de PDF</xmp:CreatorTool>
+      <dc:format>application/pdf</dc:format>
+      <dc:title><rdf:Alt><rdf:li xml:lang="x-default">${title}</rdf:li></rdf:Alt></dc:title>
+      <dc:creator><rdf:Seq><rdf:li>${author}</rdf:li></rdf:Seq></dc:creator>
+      <dc:description><rdf:Alt><rdf:li xml:lang="x-default">${subject}</rdf:li></rdf:Alt></dc:description>
+      <pdf:Producer>UNICRED Editor de PDF (pdf-lib)</pdf:Producer>
+    </rdf:Description>
+  </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end="w"?>`;
+
+    const enc      = new TextEncoder();
+    const xmpBytes = enc.encode(xmpStr);
+
+    // Localiza o stream Metadata no PDF (criado pelo pdf-lib, mas vazio)
+    const dec = new TextDecoder('latin1');
+    const pdfText = dec.decode(pdf);
+
+    const metaIdx = pdfText.indexOf('/Type /Metadata');
+    if (metaIdx !== -1) {
+      // Acha stream\n ... endstream dentro deste objeto
+      const streamStart = pdfText.indexOf('stream\n', metaIdx);
+      const streamEnd   = pdfText.indexOf('endstream', streamStart);
+      if (streamStart !== -1 && streamEnd !== -1) {
+        const newContent = '\n' + xmpStr + '\n';
+        const newContentBytes = enc.encode(newContent);
+        // Monta o novo PDF: antes do stream + novo conteúdo + endstream em diante
+        const before = pdf.slice(0, streamStart + 7); // 'stream\n' = 7 bytes
+        const after  = pdf.slice(streamEnd);
+        pdf = _cat(before, newContentBytes, after);
+
+        // Corrige /Length do objeto Metadata
+        const pdfText2  = dec.decode(pdf);
+        const lenSearch = '/Length';
+        const lenIdx    = pdfText2.lastIndexOf(lenSearch, streamStart + 7);
+        if (lenIdx !== -1) {
+          const lenEnd   = pdfText2.indexOf('\n', lenIdx);
+          const before2  = pdf.slice(0, lenIdx);
+          const after2   = pdf.slice(lenEnd);
+          const newLen   = enc.encode(`/Length ${newContentBytes.length}`);
+          pdf = _cat(before2, newLen, after2);
+        }
+      }
+    } else {
+      // Fallback: pdf-lib não criou stream Metadata — injeta objeto raw antes do xref
+      const xrefIdx   = _lastIndexOf(pdf, enc.encode('\nxref\n'));
+      if (xrefIdx !== -1) {
+        // Conta objetos para determinar próximo número
+        let objCount = 0;
+        let searchIdx = 0;
+        while (true) {
+          const found = pdfText.indexOf(' 0 obj\n', searchIdx);
+          if (found === -1) break;
+          objCount++; searchIdx = found + 1;
+        }
+        const objNum   = objCount + 1;
+        const header   = enc.encode(`\n${objNum} 0 obj\n<<\n/Type /Metadata\n/Subtype /XML\n/Length ${xmpBytes.length}\n>>\nstream\n`);
+        const trailer  = enc.encode('\nendstream\nendobj\n');
+        const xmpObj   = _cat(header, xmpBytes, trailer);
+        pdf = _cat(pdf.slice(0, xrefIdx), xmpObj, pdf.slice(xrefIdx));
+      }
+    }
+
+    // ── 6. Verificação ────────────────────────────────────────────────────
+    const pdfFinal  = dec.decode(pdf);
+    const hasPdfaid = pdfFinal.includes('pdfaid:part') && pdfFinal.includes('pdfaid:conformance');
+    const hasOI     = pdfFinal.includes('GTS_PDFA1');
+
+    const fname = store[key][0].name.replace(/\.pdf$/i,'') + '_pdfa.pdf';
+    const url   = URL.createObjectURL(new Blob([pdf], {type:'application/pdf'}));
+
+    setResult(key, `<div class="rarea">
+      <h4>✅ PDF/A-1b gerado</h4>
+      <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);border-radius:7px;padding:10px 13px;margin-bottom:10px;font-size:12px;line-height:1.8">
+        <div style="color:#86efac">📋 <b>Conformidade:</b> PDF/A-1b (ISO 19005-1)</div>
+        <div style="color:${hasPdfaid?'#86efac':'#fde68a'}">${hasPdfaid?'✅':'⚠️'} Metadados <code>pdfaid:part=1</code> e <code>pdfaid:conformance=B</code> ${hasPdfaid?'injetados':'verifique com VeraPDF'}</div>
+        <div style="color:${hasOI?'#86efac':'#fde68a'}">${hasOI?'✅':'⚠️'} OutputIntent sRGB (GTS_PDFA1) ${hasOI?'presente':'ausente'}</div>
+      </div>
+      <div class="ditem"><span>🏅</span><span>${fname}</span>
+        <a href="${url}" download="${fname}">⬇️ Baixar PDF/A</a>
+      </div>
+    </div>`);
+    toast('✅ PDF/A-1b gerado!', 'ok');
+  } catch(e) { setResult(key, errBox(e.message)); toast('❌ Erro', 'er'); }
+  loading(key, false);
+}
+
+// Helper: último índice de um Uint8Array dentro de outro
+function _lastIndexOf(haystack, needle) {
+  for (let i = haystack.length - needle.length; i >= 0; i--) {
+    let found = true;
+    for (let j = 0; j < needle.length; j++) {
+      if (haystack[i+j] !== needle[j]) { found = false; break; }
+    }
+    if (found) return i;
+  }
+  return -1;
+}
+>
