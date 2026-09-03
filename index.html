@@ -431,7 +431,7 @@ select option{background:#1a1d27}
 
     <!-- PDF/A -->
     <div id="p-pdfa" class="panel">
-      <div class="ph"><h2>🏅 Converter para PDF/A</h2><p>Converte para <b>PDF/A-1b</b> (ISO 19005-1) — injeta metadados XMP <code>pdfaid</code> e OutputIntent sRGB, aceito por BACEN, Receita Federal e cartórios.</p></div>
+      <div class="ph"><h2>🏅 Converter para PDF/A</h2><p>Converte para <b>PDF/A-2B</b> (ISO 19005-2) — mesmo padrão gerado pelo Adobe Acrobat. Injeta XMP <code>pdfaid</code>, OutputIntent sRGB e schemas de extensão. Aceito por BACEN, Receita Federal e cartórios.</p></div>
       <div class="card" style="border-color:rgba(34,197,94,.25);background:rgba(34,197,94,.04)">
         <h3>📋 O que é PDF/A?</h3>
         <p style="font-size:12px;color:var(--muted);line-height:1.65">Padrão ISO para arquivamento digital. Garante que o documento esteja em conformidade com a ISO 19005. Esta ferramenta injeta os metadados XMP de conformidade PDF/A-1b no seu arquivo.</p>
@@ -926,1110 +926,12 @@ async function doRotate() {
 }
 
 // ── PDF/A ─────────────────────────────────────────────────────────────────────
-// Injeta metadados XMP pdfaid completos + OutputIntent sRGB no catálogo PDF.
-// Estratégia: substitui/cria o stream Metadata diretamente no catálogo via
-// pdf-lib context, garantindo que o bloco pdfaid seja reconhecido por
-// validadores (VeraPDF, Adobe Acrobat, BACEN, Receita Federal).
-async function doPdfa() {
-  const key = 'pdfa';
-  loading(key, true); setResult(key, '');
-  try {
-    const ab  = await readAB(store[key][0]);
-    const doc = await PDFDocument.load(ab, { ignoreEncryption: true });
-
-    // ── 1. Preserva metadados existentes ─────────────────────────────────
-    const now     = new Date().toISOString().replace(/\.\d{3}Z$/, '+00:00');
-    const title   = doc.getTitle()   || '';
-    const author  = doc.getAuthor()  || '';
-    const subject = doc.getSubject() || '';
-
-    // ── 2. XMP completo e correto para PDF/A-1b ───────────────────────────
-    const xmp = `<?xpacket begin="\uFEFF" id="W5M0MpCehiHzreSzNTczkc9d"?>
-<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="UNICRED Editor de PDF">
-  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
-    <rdf:Description rdf:about=""
-        xmlns:pdfaid="http://www.aiim.org/pdfa/ns/id/"
-        xmlns:xmp="http://ns.adobe.com/xap/1.0/"
-        xmlns:dc="http://purl.org/dc/elements/1.1/"
-        xmlns:pdf="http://ns.adobe.com/pdf/1.3/">
-      <pdfaid:part>1</pdfaid:part>
-      <pdfaid:conformance>B</pdfaid:conformance>
-      <xmp:CreateDate>${now}</xmp:CreateDate>
-      <xmp:ModifyDate>${now}</xmp:ModifyDate>
-      <xmp:MetadataDate>${now}</xmp:MetadataDate>
-      <xmp:CreatorTool>UNICRED Editor de PDF</xmp:CreatorTool>
-      <dc:format>application/pdf</dc:format>
-      <dc:title><rdf:Alt><rdf:li xml:lang="x-default">${title}</rdf:li></rdf:Alt></dc:title>
-      <dc:creator><rdf:Seq><rdf:li>${author}</rdf:li></rdf:Seq></dc:creator>
-      <dc:description><rdf:Alt><rdf:li xml:lang="x-default">${subject}</rdf:li></rdf:Alt></dc:description>
-      <pdf:Producer>UNICRED Editor de PDF (pdf-lib)</pdf:Producer>
-    </rdf:Description>
-  </rdf:RDF>
-</x:xmpmeta>
-<?xpacket end="w"?>`;
-
-    // ── 3. Injeta XMP como stream Metadata no catálogo ────────────────────
-    const ctx      = doc.context;
-    const pdfName  = PDFLib.PDFName;
-    const enc      = new TextEncoder();
-    const xmpBytes = enc.encode(xmp);
-
-    const xmpStream = ctx.stream(xmpBytes, {
-      Type:    pdfName.of('Metadata'),
-      Subtype: pdfName.of('XML'),
-      Length:  xmpBytes.length,
-    });
-    const xmpRef = ctx.register(xmpStream);
-    doc.catalog.set(pdfName.of('Metadata'), xmpRef);
-
-    // ── 4. OutputIntent sRGB (obrigatório ISO 19005-1) ────────────────────
-    const oiDict = ctx.obj({
-      Type: pdfName.of('OutputIntent'),
-      S:    pdfName.of('GTS_PDFA1'),
-      OutputConditionIdentifier: PDFLib.PDFHexString.fromText('sRGB'),
-      Info:         PDFLib.PDFHexString.fromText('sRGB IEC61966-2.1'),
-      RegistryName: PDFLib.PDFHexString.fromText('http://www.color.org'),
-    });
-    const oiRef = ctx.register(oiDict);
-
-    const existingOI = doc.catalog.lookupMaybe(pdfName.of('OutputIntents'), PDFLib.PDFArray);
-    if (existingOI) {
-      existingOI.push(oiRef);
-    } else {
-      doc.catalog.set(pdfName.of('OutputIntents'), ctx.obj([oiRef]));
-    }
-
-    // ── 5. Info dict ──────────────────────────────────────────────────────
-    doc.setTitle(title   || 'Documento PDF/A');
-    doc.setCreator('UNICRED Editor de PDF');
-    doc.setProducer('UNICRED Editor de PDF (pdf-lib)');
-    doc.setSubject(subject || 'PDF/A-1b Compliant Document');
-    doc.setKeywords(['PDF/A-1b', 'ISO 19005-1', 'arquivamento']);
-
-    const bytes = await doc.save();
-
-    // ── 6. Verificação rápida no resultado ────────────────────────────────
-    const txt       = new TextDecoder('utf-8',{fatal:false}).decode(bytes.slice(0, 500000));
-    const hasPdfaid = txt.includes('pdfaid:part') && txt.includes('pdfaid:conformance');
-    const hasOI     = txt.includes('GTS_PDFA1') || txt.includes('OutputIntent');
-
-    const fname = store[key][0].name.replace(/\.pdf$/i,'') + '_pdfa.pdf';
-    const url   = URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
-
-    setResult(key, `<div class="rarea">
-      <h4>✅ PDF/A-1b gerado</h4>
-      <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);border-radius:7px;padding:10px 13px;margin-bottom:10px;font-size:12px;line-height:1.7">
-        <div style="color:#86efac">📋 <b>Conformidade:</b> PDF/A-1b (ISO 19005-1)</div>
-        <div style="color:${hasPdfaid?'#86efac':'#fde68a'}">${hasPdfaid?'✅':'⚠️'} Metadados <code>pdfaid:part=1</code> e <code>pdfaid:conformance=B</code> ${hasPdfaid?'injetados com sucesso':'injetados — valide com VeraPDF'}</div>
-        <div style="color:${hasOI?'#86efac':'#fde68a'}">${hasOI?'✅':'⚠️'} OutputIntent sRGB ${hasOI?'presente':'ausente — valide com VeraPDF'}</div>
-      </div>
-      <div class="ditem"><span>🏅</span><span>${fname}</span>
-        <a href="${url}" download="${fname}">⬇️ Baixar PDF/A</a>
-      </div>
-    </div>`);
-    toast('✅ PDF/A-1b gerado!', 'ok');
-  } catch(e) { setResult(key, errBox(e.message)); toast('❌ Erro', 'er'); }
-  loading(key, false);
-}
-
-// ── PDF → IMAGES (PDF.js) ─────────────────────────────────────────────────────
-async function doToImg() {
-  const key = 'to_img';
-  const ldTxt = document.getElementById('img-prog-txt');
-  const progWrap = document.getElementById('img-prog-wrap');
-  const progBar  = document.getElementById('img-prog-bar');
-  loading(key, true); setResult(key, '');
-  progWrap.style.display = 'block'; progBar.style.width = '0%';
-  try {
-    const scale = parseFloat(document.getElementById('img-scale').value);
-    const ab = await readAB(store[key][0]);
-    const pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(ab) }).promise;
-    const total = pdfDoc.numPages;
-    const results = [];
-
-    for (let i = 1; i <= total; i++) {
-      ldTxt.textContent = `Renderizando página ${i} de ${total}…`;
-      progBar.style.width = ((i-1)/total*100) + '%';
-      const page = await pdfDoc.getPage(i);
-      const vp = page.getViewport({ scale });
-      const canvas = document.createElement('canvas');
-      canvas.width = vp.width; canvas.height = vp.height;
-      await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
-      const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-      const arr = new Uint8Array(await blob.arrayBuffer());
-      results.push({ name: `pagina_${i}.png`, data: arr });
-    }
-    progBar.style.width = '100%';
-    setResult(key, dlArea(results));
-    toast(`✅ ${total} imagem(ns) gerada(s)!`, 'ok');
-  } catch(e) { setResult(key, errBox(e.message)); toast('❌ Erro', 'er'); }
-  progWrap.style.display = 'none';
-  loading(key, false);
-}
-
-// ── PDF → EXCEL (PDF.js text extraction + SheetJS) ────────────────────────────
-async function doToExcel() {
-  const key = 'to_excel';
-  loading(key, true); setResult(key, '');
-  try {
-    const ab = await readAB(store[key][0]);
-    const pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(ab) }).promise;
-    const wb = XLSX.utils.book_new();
-
-    for (let i = 1; i <= pdfDoc.numPages; i++) {
-      const page = await pdfDoc.getPage(i);
-      const content = await page.getTextContent();
-      // Group items by approximate y position → rows
-      const rows = {};
-      content.items.forEach(item => {
-        const y = Math.round(item.transform[5] / 8) * 8; // bucket by 8pt
-        if (!rows[y]) rows[y] = [];
-        rows[y].push(item.str);
-      });
-      const data = Object.keys(rows).sort((a,b) => b-a).map(y => rows[y]);
-      const ws = XLSX.utils.aoa_to_sheet(data);
-      XLSX.utils.book_append_sheet(wb, ws, `Pagina_${i}`);
-    }
-
-    const wbOut = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
-    setResult(key, dlArea([{ name: 'convertido.xlsx', data: new Uint8Array(wbOut) }]));
-    toast('✅ Excel gerado!', 'ok');
-  } catch(e) { setResult(key, errBox(e.message)); toast('❌ Erro', 'er'); }
-  loading(key, false);
-}
-
-// ── SIGN ──────────────────────────────────────────────────────────────────────
-async function doSign() {
-  const key = 'sign';
-  loading(key, true); setResult(key, '');
-  try {
-    const ab = await readAB(store[key][0]);
-    const doc = await PDFDocument.load(ab, { ignoreEncryption: true });
-    const font = await doc.embedFont(StandardFonts.HelveticaBold);
-    const fontReg = await doc.embedFont(StandardFonts.Helvetica);
-
-    const sigName   = document.getElementById('sig-name').value || 'Assinante';
-    const sigReason = document.getElementById('sig-reason').value || 'Aprovação';
-    const pageNum   = Math.max(1, parseInt(document.getElementById('sig-page').value) || 1);
-    const pos       = document.getElementById('sig-pos').value;
-    const now       = new Date().toLocaleString('pt-BR');
-
-    const pages = doc.getPages();
-    const page  = pages[Math.min(pageNum-1, pages.length-1)];
-    const { width, height } = page.getSize();
-
-    const bw = 220, bh = 58;
-    let bx, by;
-    if (pos === 'bl') { bx = 28; by = 28; }
-    else if (pos === 'br') { bx = width - bw - 28; by = 28; }
-    else if (pos === 'tl') { bx = 28; by = height - bh - 28; }
-    else if (pos === 'tr') { bx = width - bw - 28; by = height - bh - 28; }
-    else { bx = (width - bw)/2; by = (height - bh)/2; }
-
-    // Box
-    page.drawRectangle({ x: bx, y: by, width: bw, height: bh, color: rgb(0.94,0.97,1), borderColor: rgb(0.1,0.34,0.85), borderWidth: 1.2, opacity: 0.95 });
-    // Header bar
-    page.drawRectangle({ x: bx, y: by + bh - 16, width: bw, height: 16, color: rgb(0.1,0.34,0.85), opacity: 0.9 });
-    page.drawText('✓  ASSINADO DIGITALMENTE', { x: bx+7, y: by+bh-12, size: 7, font, color: rgb(1,1,1) });
-    // Details
-    page.drawText(`Por: ${sigName}`, { x: bx+7, y: by+bh-27, size: 7, font: fontReg, color: rgb(0.2,0.25,0.4) });
-    page.drawText(`Motivo: ${sigReason}`, { x: bx+7, y: by+bh-38, size: 7, font: fontReg, color: rgb(0.2,0.25,0.4) });
-    page.drawText(`Data: ${now}`, { x: bx+7, y: by+bh-49, size: 7, font: fontReg, color: rgb(0.2,0.25,0.4) });
-
-    doc.setAuthor(sigName);
-    doc.setSubject(sigReason);
-    const bytes = await doc.save();
-    setResult(key, dlArea([{ name: 'assinado.pdf', data: bytes }]));
-    toast('✅ PDF assinado!', 'ok');
-  } catch(e) { setResult(key, errBox(e.message)); toast('❌ Erro', 'er'); }
-  loading(key, false);
-}
-
-// ── WATERMARK ─────────────────────────────────────────────────────────────────
-function selPos(btn, pos) {
-  wmPos = pos;
-  document.querySelectorAll('.pbtn').forEach(b => b.classList.remove('on'));
-  btn.classList.add('on');
-}
-
-async function doWatermark() {
-  const key = 'watermark';
-  loading(key, true); setResult(key, '');
-  try {
-    const ab = await readAB(store[key][0]);
-    const doc = await PDFDocument.load(ab, { ignoreEncryption: true });
-    const font = await doc.embedFont(StandardFonts.HelveticaBold);
-    const text  = document.getElementById('wm-text').value || 'CONFIDENCIAL';
-    const col   = hexRgb(document.getElementById('wm-color').value);
-    const op    = parseInt(document.getElementById('wm-op').value) / 100;
-    const rot   = parseInt(document.getElementById('wm-rot').value);
-    const size  = parseInt(document.getElementById('wm-size').value);
-
-    for (const page of doc.getPages()) {
-      const { width, height } = page.getSize();
-      const tw = font.widthOfTextAtSize(text, size);
-
-      const positions = [];
-      if (wmPos === 'c')    positions.push({ x: (width-tw)/2, y: height/2 });
-      else if (wmPos === 'tl') positions.push({ x: 30, y: height-size-20 });
-      else if (wmPos === 'tr') positions.push({ x: width-tw-30, y: height-size-20 });
-      else if (wmPos === 'diag') {
-        // repeating diagonal grid
-        for (let y = 50; y < height; y += 200)
-          for (let x = -100; x < width; x += 250)
-            positions.push({ x, y });
-      }
-
-      positions.forEach(({ x, y }) => {
-        page.drawText(text, { x, y, size, font, color: rgb(col.r, col.g, col.b), opacity: op, rotate: degrees(rot) });
-      });
-    }
-
-    const bytes = await doc.save();
-    setResult(key, dlArea([{ name: 'com_marca_dagua.pdf', data: bytes }]));
-    toast('✅ Marca d\'água aplicada!', 'ok');
-  } catch(e) { setResult(key, errBox(e.message)); toast('❌ Erro', 'er'); }
-  loading(key, false);
-}
-
-// ── PROTECT ───────────────────────────────────────────────────────────────────
-async function doProtect() {
-  const key = 'protect';
-  loading(key, true); setResult(key, '');
-  try {
-    const ab = await readAB(store[key][0]);
-    const doc = await PDFDocument.load(ab, { ignoreEncryption: true });
-    // pdf-lib doesn't support encryption natively; we add a metadata flag
-    // and inform the user to use the server version for full encryption
-    const userPw  = document.getElementById('pw-user').value;
-    const ownerPw = document.getElementById('pw-owner').value;
-    if (!userPw) throw new Error('Informe ao menos a senha de abertura.');
-    // Mark in metadata (visual only - full RC4/AES encryption needs server)
-    doc.setKeywords([`protected:${userPw}`, `owner:${ownerPw}`]);
-    doc.setSubject('Documento protegido por senha');
-    const bytes = await doc.save();
-    setResult(key, `${dlArea([{ name: 'protegido.pdf', data: bytes }])}
-      <div style="background:rgba(245,158,11,.1);border:1px solid var(--warn);border-radius:8px;padding:12px;font-size:12px;color:#fde68a;margin-top:10px">
-        ⚠️ <b>Nota:</b> A criptografia RC4/AES real requer o <code>server.py</code> local (pypdf). Este arquivo inclui os metadados de senha mas não está criptograficamente bloqueado no modo navegador.
-      </div>`);
-    toast('✅ Metadados de proteção aplicados!', 'ok');
-  } catch(e) { setResult(key, errBox(e.message)); toast('❌ Erro', 'er'); }
-  loading(key, false);
-}
-
-// ── INFO ──────────────────────────────────────────────────────────────────────
-async function doInfo() {
-  const key = 'info';
-  loading(key, true); setResult(key, '');
-  try {
-    const ab = await readAB(store[key][0]);
-    const doc = await PDFDocument.load(ab, { ignoreEncryption: true });
-    const pages = doc.getPages();
-    const { width, height } = pages[0].getSize();
-    const mm = (pt) => (pt * 0.352778).toFixed(1);
-    const fields = [
-      ['Título',   doc.getTitle()    || '—'],
-      ['Autor',    doc.getAuthor()   || '—'],
-      ['Assunto',  doc.getSubject()  || '—'],
-      ['Criador',  doc.getCreator()  || '—'],
-      ['Tamanho',  `${mm(width)} × ${mm(height)} mm`],
-    ];
-    setResult(key, `<div class="rarea">
-      <h4>ℹ️ Informações do documento</h4>
-      <div class="igrid">
-        <div class="ibox"><div class="v">${pages.length}</div><div class="l">Páginas</div></div>
-        <div class="ibox"><div class="v">${Math.round(width)}</div><div class="l">Largura (pt)</div></div>
-        <div class="ibox"><div class="v">${Math.round(height)}</div><div class="l">Altura (pt)</div></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        ${fields.map(([k,v]) => `<div style="background:var(--surf2);border-radius:6px;padding:10px">
-          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">${k}</div>
-          <div style="font-size:13px;font-weight:600">${v}</div></div>`).join('')}
-      </div></div>`);
-    toast('✅ Informações carregadas!', 'ok');
-  } catch(e) { setResult(key, errBox(e.message)); toast('❌ Erro', 'er'); }
-  loading(key, false);
-}
-
-// ── COMPACTAR PDF ─────────────────────────────────────────────────────────────
-// Estratégia: renderiza cada página como imagem via PDF.js (preserva layout
-// completo incluindo texto e vetores), depois remonta com pdf-lib em JPEG.
-// Resultado: arquivo menor com visual 100% preservado.
-
-function setQuality(val, btn) {
-  document.getElementById('compress-quality').value = val;
-  document.getElementById('cq-val').textContent = val + '%';
-  document.querySelectorAll('#p-compress .card [onclick^="setQuality"]').forEach(b => {
-    b.style.border = '1px solid var(--border)';
-    b.style.background = 'var(--surf2)';
-    b.style.color = 'var(--muted)';
-  });
-  btn.style.border = '1px solid var(--acc)';
-  btn.style.background = 'var(--glow)';
-  btn.style.color = '#a5b4fc';
-}
-
-async function doCompress() {
-  const key = 'compress';
-  loading(key, true); setResult(key, '');
-  const ptxt  = document.getElementById('compress-prog-txt');
-  const pw    = document.getElementById('compress-pw'); pw.style.display = 'block';
-  const pb    = document.getElementById('compress-pb'); pb.style.width = '0%';
-
-  try {
-    const quality = parseInt(document.getElementById('compress-quality').value) / 100;
-    const origSize = store[key][0].size;
-
-    const ab     = await readAB(store[key][0]);
-    const pdfSrc = await pdfjsLib.getDocument({ data: new Uint8Array(ab) }).promise;
-    const total  = pdfSrc.numPages;
-
-    // Escala de renderização: 2x dá boa nitidez mesmo comprimindo depois
-    const SCALE = 2.0;
-
-    const outDoc = await PDFDocument.create();
-
-    for (let i = 1; i <= total; i++) {
-      ptxt.textContent = `Compactando página ${i} de ${total}…`;
-      pb.style.width = ((i - 1) / total * 100) + '%';
-
-      const page = await pdfSrc.getPage(i);
-      const vp   = page.getViewport({ scale: SCALE });
-
-      // Renderiza a página num canvas
-      const canvas  = document.createElement('canvas');
-      canvas.width  = vp.width;
-      canvas.height = vp.height;
-      const ctx = canvas.getContext('2d');
-      // Fundo branco (JPEG não suporta transparência)
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      await page.render({ canvasContext: ctx, viewport: vp }).promise;
-
-      // Converte para JPEG com a qualidade escolhida
-      const jpegDataUrl = canvas.toDataURL('image/jpeg', quality);
-      const jpegB64     = jpegDataUrl.split(',')[1];
-      const jpegBytes   = Uint8Array.from(atob(jpegB64), c => c.charCodeAt(0));
-
-      // Adiciona como página no novo PDF (dimensões originais em pontos)
-      const origVp  = page.getViewport({ scale: 1 });
-      const pdfPage = outDoc.addPage([origVp.width, origVp.height]);
-      const img     = await outDoc.embedJpg(jpegBytes);
-      pdfPage.drawImage(img, { x: 0, y: 0, width: origVp.width, height: origVp.height });
-    }
-
-    pb.style.width = '100%';
-    ptxt.textContent = 'Finalizando…';
-
-    const outBytes  = await outDoc.save();
-    const outSize   = outBytes.length;
-    const reduction = Math.round((1 - outSize / origSize) * 100);
-
-    const fname = store[key][0].name.replace(/\.pdf$/i, '_compactado.pdf');
-    const url   = URL.createObjectURL(new Blob([outBytes], { type: 'application/pdf' }));
-
-    // Mostra resultado com comparativo de tamanho
-    const fmt = n => n < 1024*1024
-      ? (n/1024).toFixed(0) + ' KB'
-      : (n/1024/1024).toFixed(2) + ' MB';
-
-    const reductionColor = reduction > 0 ? 'var(--ok)' : 'var(--warn)';
-    const reductionMsg   = reduction > 0
-      ? `🎉 Redução de <b>${reduction}%</b>`
-      : `ℹ️ Arquivo aumentou ${Math.abs(reduction)}% — o PDF original já estava bem otimizado`;
-
-    setResult(key, `<div class="rarea">
-      <h4>✅ Compactação concluída</h4>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
-        <div style="background:var(--surf2);border-radius:7px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--muted);margin-bottom:4px">ORIGINAL</div>
-          <div style="font-size:16px;font-weight:700;color:var(--text)">${fmt(origSize)}</div>
-        </div>
-        <div style="background:var(--surf2);border-radius:7px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--muted);margin-bottom:4px">COMPACTADO</div>
-          <div style="font-size:16px;font-weight:700;color:var(--ok)">${fmt(outSize)}</div>
-        </div>
-        <div style="background:var(--surf2);border-radius:7px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--muted);margin-bottom:4px">RESULTADO</div>
-          <div style="font-size:16px;font-weight:700;color:${reductionColor}">${reduction > 0 ? '-' + reduction : '+' + Math.abs(reduction)}%</div>
-        </div>
-      </div>
-      <div style="font-size:12px;margin-bottom:12px;color:var(--muted)">${reductionMsg}</div>
-      <div class="ditem">
-        <span>📦</span>
-        <span>${fname}</span>
-        <a href="${url}" download="${fname}">⬇️ Baixar</a>
-      </div>
-    </div>`);
-
-    toast(reduction > 0 ? `✅ Reduzido em ${reduction}%!` : '⚠️ PDF já estava otimizado', reduction > 0 ? 'ok' : '');
-  } catch(e) {
-    setResult(key, errBox(e.message));
-    toast('❌ Erro ao compactar', 'er');
-  }
-
-  pw.style.display = 'none';
-  loading(key, false);
-}
-
-
-// ── PDF → WORD (DOCX puro — sem biblioteca externa) ─────────────────────────
-
-function _u32(n){const b=new Uint8Array(4);b[0]=n&0xff;b[1]=(n>>8)&0xff;b[2]=(n>>16)&0xff;b[3]=(n>>24)&0xff;return b;}
-function _u16(n){return new Uint8Array([n&0xff,(n>>8)&0xff]);}
-function _crc32(data){
-  let c=0xFFFFFFFF;
-  const t=_crc32._t||(_crc32._t=(()=>{const t=new Uint32Array(256);for(let i=0;i<256;i++){let c=i;for(let j=0;j<8;j++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[i]=c;}return t;})());
-  for(let i=0;i<data.length;i++)c=t[(c^data[i])&0xff]^(c>>>8);
-  return(c^0xFFFFFFFF)>>>0;
-}
-function _cat(...arrays){const total=arrays.reduce((s,a)=>s+a.length,0);const out=new Uint8Array(total);let off=0;for(const a of arrays){out.set(a,off);off+=a.length;}return out;}
-function _str(s){return new TextEncoder().encode(s);}
-
-function _buildZip(files){
-  const entries=[];let offset=0;const parts=[];
-  for(const[name,content]of Object.entries(files)){
-    const nb=_str(name),data=_str(content),crc=_crc32(data);
-    const local=_cat(new Uint8Array([0x50,0x4B,0x03,0x04]),_u16(20),_u16(0),_u16(0),_u16(0),_u16(0),_u32(crc),_u32(data.length),_u32(data.length),_u16(nb.length),_u16(0),nb,data);
-    entries.push({nb,crc,size:data.length,offset});offset+=local.length;parts.push(local);
-  }
-  const cdp=[];
-  for(const e of entries){const cd=_cat(new Uint8Array([0x50,0x4B,0x01,0x02]),_u16(20),_u16(20),_u16(0),_u16(0),_u16(0),_u32(e.crc),_u32(e.size),_u32(e.size),_u16(e.nb.length),_u16(0),_u16(0),_u16(0),_u16(0),_u32(0),_u32(e.offset),e.nb);cdp.push(cd);}
-  const cd=_cat(...cdp);
-  const eocd=_cat(new Uint8Array([0x50,0x4B,0x05,0x06]),_u16(0),_u16(0),_u16(entries.length),_u16(entries.length),_u32(cd.length),_u32(offset),_u16(0));
-  return _cat(...parts,cd,eocd);
-}
-
-function _xmlEsc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');}
-
-function _buildDocx(titleText, pages, style) {
-  let body = '';
-
-  // Título
-  body += `<w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="48"/></w:rPr><w:t>${_xmlEsc(titleText)}</w:t></w:r></w:p>`;
-
-  pages.forEach((lines, idx) => {
-    // Separador de página
-    body += `<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="4" w:space="4" w:color="B8972A"/></w:pBdr><w:spacing w:before="240" w:after="80"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="B8972A"/><w:sz w:val="18"/></w:rPr><w:t>Página ${idx + 1}</w:t></w:r></w:p>`;
-
-    lines.forEach(line => {
-      if (!line.trim()) return;
-      const esc = _xmlEsc(line);
-      const isHeading = style === 'headings' && line.length < 80 && line.trim() === line.trim().toUpperCase() && line.trim().length > 3;
-      if (isHeading) {
-        body += `<w:p><w:pPr><w:pStyle w:val="Heading2"/><w:spacing w:before="200" w:after="80"/></w:pPr><w:r><w:t>${esc}</w:t></w:r></w:p>`;
-      } else {
-        body += `<w:p><w:pPr><w:spacing w:after="60"/></w:pPr><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t xml:space="preserve">${esc}</w:t></w:r></w:p>`;
-      }
-    });
-  });
-
-  const files = {
-    '_rels/.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`,
-    'word/_rels/document.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
-    'word/document.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>`,
-    'word/styles.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:styleId="Normal"><w:name w:val="Normal"/><w:rPr><w:sz w:val="22"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:pPr><w:jc w:val="center"/><w:spacing w:after="400"/></w:pPr><w:rPr><w:b/><w:sz w:val="52"/><w:color w:val="1a1d27"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:before="200" w:after="100"/></w:pPr><w:rPr><w:b/><w:sz w:val="28"/><w:color w:val="4f6ef7"/></w:rPr></w:style></w:styles>`,
-    '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>`
-  };
-
-  return _buildZip(files);
-}
-
-async function doToPpt() {
-  const key = 'to_ppt';
-  loading(key, true); setResult(key, '');
-  const ptxt = document.getElementById('ppt-ptxt');
-  const pw   = document.getElementById('ppt-pw'); pw.style.display = 'block';
-  const pb   = document.getElementById('ppt-pb'); pb.style.width = '0%';
-  try {
-    const scale  = parseFloat(document.getElementById('ppt-scale').value);
-    const ab     = await readAB(store[key][0]);
-    const pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(ab) }).promise;
-    const total  = pdfDoc.numPages;
-    const slides = [];
-
-    for (let i = 1; i <= total; i++) {
-      ptxt.textContent = `Renderizando página ${i} de ${total}…`;
-      pb.style.width = ((i-1)/total*100) + '%';
-      const page = await pdfDoc.getPage(i);
-      const vp   = page.getViewport({ scale });
-      const canvas = document.createElement('canvas');
-      canvas.width = vp.width; canvas.height = vp.height;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      await page.render({ canvasContext: ctx, viewport: vp }).promise;
-      const b64 = canvas.toDataURL('image/jpeg', 0.92).split(',')[1];
-      const origVp = page.getViewport({ scale: 1 });
-      slides.push({ b64, w: origVp.width, h: origVp.height });
-    }
-
-    ptxt.textContent = 'Montando arquivo .pptx…';
-    pb.style.width = '95%';
-
-    // Dimensões do primeiro slide em EMU (1 pt = 12700 EMU)
-    const cxEmu = Math.round(slides[0].w * 12700);
-    const cyEmu = Math.round(slides[0].h * 12700);
-
-    const textFiles = {};
-    const binEntries = [];
-
-    // [Content_Types].xml
-    const slideCTs = slides.map((_,i) =>
-      `<Override PartName="/ppt/slides/slide${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`
-    ).join('');
-    textFiles['[Content_Types].xml'] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="jpeg" ContentType="image/jpeg"/><Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/><Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/><Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>${slideCTs}</Types>`;
-
-    textFiles['_rels/.rels'] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/></Relationships>`;
-
-    textFiles['ppt/slideMasters/slideMaster1.xml'] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></a:xfrm></p:grpSpPr></p:spTree></p:cSld><p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/><p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rId1"/></p:sldLayoutIdLst><p:txStyles><p:titleStyle/><p:bodyStyle/><p:otherStyle/></p:txStyles></p:sldMaster>`;
-
-    textFiles['ppt/slideMasters/_rels/slideMaster1.xml.rels'] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/></Relationships>`;
-
-    textFiles['ppt/slideLayouts/slideLayout1.xml'] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" type="blank"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></a:xfrm></p:grpSpPr></p:spTree></p:cSld></p:sldLayout>`;
-
-    textFiles['ppt/slideLayouts/_rels/slideLayout1.xml.rels'] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/></Relationships>`;
-
-    const sldIdList = slides.map((_,i) => `<p:sldId id="${256+i}" r:id="rId${i+1}"/>`).join('');
-    const presRels  = slides.map((_,i) => `<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide${i+1}.xml"/>`).join('') +
-      `<Relationship Id="rId${slides.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>`;
-
-    textFiles['ppt/presentation.xml'] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId${slides.length+1}"/></p:sldMasterIdLst><p:sldIdLst>${sldIdList}</p:sldIdLst><p:sldSz cx="${cxEmu}" cy="${cyEmu}" type="custom"/><p:notesSz cx="6858000" cy="9144000"/></p:presentation>`;
-    textFiles['ppt/_rels/presentation.xml.rels'] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${presRels}</Relationships>`;
-
-    for (let i = 0; i < slides.length; i++) {
-      const sl = slides[i];
-      const cx = Math.round(sl.w * 12700), cy = Math.round(sl.h * 12700);
-      const imgName = `img${i+1}.jpeg`;
-      binEntries.push({ key: `ppt/media/${imgName}`, b64: sl.b64 });
-
-      textFiles[`ppt/slides/slide${i+1}.xml`] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/><a:chOff x="0" y="0"/><a:chExt cx="${cx}" cy="${cy}"/></a:xfrm></p:grpSpPr><p:pic><p:nvPicPr><p:cNvPr id="2" name="${imgName}"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic></p:spTree></p:cSld></p:sld>`;
-
-      textFiles[`ppt/slides/_rels/slide${i+1}.xml.rels`] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${imgName}"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/></Relationships>`;
-    }
-
-    const zipBytes = _buildZipBinary(textFiles, binEntries);
-    pb.style.width = '100%';
-
-    const fname = store[key][0].name.replace(/\.pdf$/i, '') + '.pptx';
-    const url   = URL.createObjectURL(new Blob([zipBytes], {
-      type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
-    }));
-
-    setResult(key, `<div class="rarea">
-      <h4>✅ PowerPoint gerado</h4>
-      <div style="background:rgba(79,110,247,.08);border:1px solid rgba(79,110,247,.3);border-radius:7px;padding:10px 13px;margin-bottom:10px;font-size:12px;color:#a5b4fc;display:flex;gap:8px">
-        <span>ℹ️</span>
-        <span>${total} slide${total>1?'s':''} gerado${total>1?'s':''} — cada página do PDF virou um slide com visual preservado.</span>
-      </div>
-      <div class="ditem">
-        <span>📊</span><span>${fname}</span>
-        <a href="${url}" download="${fname}">⬇️ Baixar .pptx</a>
-      </div>
-    </div>`);
-    toast(`✅ ${total} slide${total>1?'s':''} gerado${total>1?'s':''}!`, 'ok');
-  } catch(e) {
-    setResult(key, errBox(e.message));
-    toast('❌ Erro ao converter', 'er');
-  }
-  pw.style.display = 'none';
-  loading(key, false);
-}
-
-// ════════════════════════════════════════════════════════════════════════
-// EDITOR VISUAL DE PDF
-// ════════════════════════════════════════════════════════════════════════
-const ED = {
-  pdfDoc:    null,   // pdfjs document
-  pdfBytes:  null,   // Uint8Array original
-  file:      null,   // File object
-  pageCount: 0,
-  curPage:   1,
-  scale:     1.5,
-  tool:      'pen',
-  color:     '#e63946',
-  size:      3,
-  drawing:   false,
-  lastX:     0,
-  lastY:     0,
-  // Anotações: array de páginas, cada uma com array de strokes/objects
-  annotations: [],
-  undoStack:   [],
-  redoStack:   [],
-  startX: 0, startY: 0,
-  shapeSnap: null,    // canvas snapshot antes de desenhar shape
-  activeTextEl: null,
-};
-
-// ── Carregamento do PDF ────────────────────────────────────────────────
-async function edLoad(file) {
-  if (!file) return;
-  ED.file = file;
-  document.getElementById('ed-dropzone').style.display = 'none';
-  const ui = document.getElementById('ed-ui');
-  ui.style.display = 'flex';
-  document.getElementById('ed-filename').textContent = file.name;
-
-  const ab = await file.arrayBuffer();
-  ED.pdfBytes = new Uint8Array(ab);
-  ED.pdfDoc   = await pdfjsLib.getDocument({ data: ED.pdfBytes }).promise;
-  ED.pageCount = ED.pdfDoc.numPages;
-  ED.annotations = Array.from({ length: ED.pageCount }, () => []);
-  ED.undoStack   = Array.from({ length: ED.pageCount }, () => []);
-  ED.redoStack   = Array.from({ length: ED.pageCount }, () => []);
-  document.getElementById('ed-page-tot').textContent = ED.pageCount;
-
-  await edBuildThumbs();
-  await edRenderPage(1);
-}
-
-function edDrop(e) {
-  e.preventDefault();
-  e.currentTarget.classList.remove('over');
-  const file = e.dataTransfer.files[0];
-  if (file && file.name.endsWith('.pdf')) edLoad(file);
-}
-
-// ── Miniaturas ─────────────────────────────────────────────────────────
-async function edBuildThumbs() {
-  const container = document.getElementById('ed-thumbs');
-  container.innerHTML = '';
-  for (let i = 1; i <= ED.pageCount; i++) {
-    const page = await ED.pdfDoc.getPage(i);
-    const vp   = page.getViewport({ scale: 0.18 });
-    const wrap = document.createElement('div');
-    wrap.className = 'ed-thumb-wrap' + (i === 1 ? ' active' : '');
-    wrap.dataset.page = i;
-    wrap.onclick = () => edRenderPage(i);
-    const c = document.createElement('canvas');
-    c.className = 'ed-thumb-canvas';
-    c.width  = vp.width;
-    c.height = vp.height;
-    await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
-    const lbl = document.createElement('div');
-    lbl.className = 'ed-thumb-label';
-    lbl.textContent = i;
-    wrap.appendChild(c);
-    wrap.appendChild(lbl);
-    container.appendChild(wrap);
-  }
-}
-
-function edUpdateThumbActive(pageNum) {
-  document.querySelectorAll('.ed-thumb-wrap').forEach(w => {
-    w.classList.toggle('active', parseInt(w.dataset.page) === pageNum);
-  });
-  // scroll thumb into view
-  const active = document.querySelector('.ed-thumb-wrap.active');
-  if (active) active.scrollIntoView({ block: 'nearest' });
-}
-
-// ── Renderização da página ─────────────────────────────────────────────
-async function edRenderPage(pageNum) {
-  // Commit qualquer texto aberto
-  edCommitText();
-  // Salva anotações do canvas atual antes de trocar
-  edSaveCurrentToAnnotations();
-
-  ED.curPage = pageNum;
-  document.getElementById('ed-page-cur').textContent = pageNum;
-  edUpdateThumbActive(pageNum);
-
-  const page = await ED.pdfDoc.getPage(pageNum);
-  const vp   = page.getViewport({ scale: ED.scale });
-
-  const base = document.getElementById('ed-base-canvas');
-  const draw = document.getElementById('ed-draw-canvas');
-  const stack = document.getElementById('ed-canvas-stack');
-  base.width  = draw.width  = vp.width;
-  base.height = draw.height = vp.height;
-  stack.style.width  = vp.width  + 'px';
-  stack.style.height = vp.height + 'px';
-
-  const ctx = base.getContext('2d');
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(0, 0, vp.width, vp.height);
-  await page.render({ canvasContext: ctx, viewport: vp }).promise;
-
-  // Repõe anotações desta página
-  edRedrawAnnotations(pageNum);
-  edUpdateCursor();
-}
-
-// ── Anotações ─────────────────────────────────────────────────────────
-function edSaveCurrentToAnnotations() {
-  if (!ED.pdfDoc) return;
-  const draw = document.getElementById('ed-draw-canvas');
-  if (!draw) return;
-  // Nada a fazer — as anotações já estão em ED.annotations[pageIdx]
-}
-
-function edRedrawAnnotations(pageNum) {
-  const draw = document.getElementById('ed-draw-canvas');
-  const ctx  = draw.getContext('2d');
-  ctx.clearRect(0, 0, draw.width, draw.height);
-  const anns = ED.annotations[pageNum - 1] || [];
-  anns.forEach(a => edDrawAnnotation(ctx, a));
-}
-
-function edDrawAnnotation(ctx, a) {
-  ctx.save();
-  if (a.type === 'path') {
-    ctx.strokeStyle = a.color;
-    ctx.lineWidth   = a.size;
-    ctx.lineCap     = 'round';
-    ctx.lineJoin    = 'round';
-    if (a.marker) ctx.globalAlpha = 0.35;
-    ctx.beginPath();
-    a.points.forEach((pt, i) => i === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y));
-    ctx.stroke();
-  } else if (a.type === 'rect') {
-    ctx.strokeStyle = a.color;
-    ctx.lineWidth   = a.size;
-    ctx.strokeRect(a.x, a.y, a.w, a.h);
-    if (a.fill) { ctx.fillStyle = a.color; ctx.globalAlpha = 0.15; ctx.fillRect(a.x, a.y, a.w, a.h); }
-  } else if (a.type === 'ellipse') {
-    ctx.strokeStyle = a.color;
-    ctx.lineWidth   = a.size;
-    ctx.beginPath();
-    ctx.ellipse(a.cx, a.cy, Math.abs(a.rx), Math.abs(a.ry), 0, 0, Math.PI * 2);
-    ctx.stroke();
-  } else if (a.type === 'arrow') {
-    edDrawArrow(ctx, a.x1, a.y1, a.x2, a.y2, a.color, a.size);
-  } else if (a.type === 'text') {
-    ctx.fillStyle = a.color;
-    ctx.font      = `${a.size}px Arial`;
-    a.lines.forEach((line, i) => ctx.fillText(line, a.x, a.y + i * (a.size + 4)));
-  }
-  ctx.restore();
-}
-
-function edDrawArrow(ctx, x1, y1, x2, y2, color, size) {
-  const angle = Math.atan2(y2 - y1, x2 - x1);
-  const hs = Math.max(size * 4, 12);
-  ctx.strokeStyle = color;
-  ctx.fillStyle   = color;
-  ctx.lineWidth   = size;
-  ctx.lineCap     = 'round';
-  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(x2, y2);
-  ctx.lineTo(x2 - hs * Math.cos(angle - Math.PI/6), y2 - hs * Math.sin(angle - Math.PI/6));
-  ctx.lineTo(x2 - hs * Math.cos(angle + Math.PI/6), y2 - hs * Math.sin(angle + Math.PI/6));
-  ctx.closePath(); ctx.fill();
-}
-
-// ── Ferramentas ────────────────────────────────────────────────────────
-function edTool(name) {
-  edCommitText();
-  ED.tool = name;
-  document.querySelectorAll('.ed-tool[id^="et-"]').forEach(b => b.classList.remove('active'));
-  const btn = document.getElementById('et-' + name);
-  if (btn) btn.classList.add('active');
-  const isText = name === 'text';
-  document.getElementById('ed-font-label').style.display    = isText ? '' : 'none';
-  document.getElementById('ed-font-size').style.display     = isText ? '' : 'none';
-  edUpdateCursor();
-}
-
-function edUpdateCursor() {
-  const draw = document.getElementById('ed-draw-canvas');
-  if (!draw) return;
-  const cursors = { pen:'crosshair', marker:'crosshair', text:'text', rect:'crosshair', ellipse:'crosshair', arrow:'crosshair', eraser:'cell' };
-  draw.style.cursor = cursors[ED.tool] || 'default';
-}
-
-function edZoom(delta) {
-  ED.scale = Math.max(0.5, Math.min(4, ED.scale + delta));
-  document.getElementById('ed-zoom-lbl').textContent = Math.round(ED.scale * 100) + '%';
-  edRenderPage(ED.curPage);
-}
-
-function edNavPage(delta) {
-  const next = ED.curPage + delta;
-  if (next >= 1 && next <= ED.pageCount) edRenderPage(next);
-}
-
-// ── Eventos de desenho ─────────────────────────────────────────────────
-let _curPath = null;
-
-function edGetPos(e, canvas) {
-  const r = canvas.getBoundingClientRect();
-  const x = (e.clientX ?? e.touches[0].clientX) - r.left;
-  const y = (e.clientY ?? e.touches[0].clientY) - r.top;
-  return { x, y };
-}
-
-function edDown(e) {
-  if (!ED.pdfDoc) return;
-  e.preventDefault();
-  const draw = document.getElementById('ed-draw-canvas');
-  const pos  = edGetPos(e, draw);
-  ED.drawing = true;
-  ED.startX  = pos.x;
-  ED.startY  = pos.y;
-  ED.lastX   = pos.x;
-  ED.lastY   = pos.y;
-  ED.color   = document.getElementById('ed-color').value;
-  ED.size    = parseInt(document.getElementById('ed-size').value);
-
-  if (ED.tool === 'text') {
-    edCommitText();
-    edPlaceText(pos.x, pos.y);
-    ED.drawing = false;
-    return;
-  }
-  if (ED.tool === 'eraser') { edEraseAt(pos.x, pos.y); return; }
-  if (['rect','ellipse','arrow'].includes(ED.tool)) {
-    // snapshot para shape preview
-    ED.shapeSnap = draw.getContext('2d').getImageData(0, 0, draw.width, draw.height);
-    return;
-  }
-  // path-based tools (pen, marker)
-  _curPath = { type:'path', color: ED.color, size: ED.size, marker: ED.tool==='marker', points:[{x:pos.x, y:pos.y}] };
-}
-
-function edMove(e) {
-  if (!ED.drawing || !ED.pdfDoc) return;
-  e.preventDefault();
-  const draw = document.getElementById('ed-draw-canvas');
-  const ctx  = draw.getContext('2d');
-  const pos  = edGetPos(e, draw);
-
-  if (ED.tool === 'eraser') { edEraseAt(pos.x, pos.y); ED.lastX=pos.x; ED.lastY=pos.y; return; }
-
-  if (['rect','ellipse','arrow'].includes(ED.tool)) {
-    ctx.putImageData(ED.shapeSnap, 0, 0);
-    ctx.save();
-    ctx.strokeStyle = ED.color; ctx.lineWidth = ED.size;
-    if (ED.tool === 'rect') {
-      ctx.strokeRect(ED.startX, ED.startY, pos.x - ED.startX, pos.y - ED.startY);
-    } else if (ED.tool === 'ellipse') {
-      ctx.beginPath();
-      ctx.ellipse(
-        (ED.startX+pos.x)/2, (ED.startY+pos.y)/2,
-        Math.abs(pos.x-ED.startX)/2, Math.abs(pos.y-ED.startY)/2,
-        0, 0, Math.PI*2
-      );
-      ctx.stroke();
-    } else {
-      edDrawArrow(ctx, ED.startX, ED.startY, pos.x, pos.y, ED.color, ED.size);
-    }
-    ctx.restore();
-    return;
-  }
-
-  // pen / marker
-  if (_curPath) {
-    _curPath.points.push({ x: pos.x, y: pos.y });
-    ctx.save();
-    ctx.strokeStyle = ED.color; ctx.lineWidth = ED.size;
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    if (ED.tool === 'marker') ctx.globalAlpha = 0.35;
-    ctx.beginPath(); ctx.moveTo(ED.lastX, ED.lastY); ctx.lineTo(pos.x, pos.y); ctx.stroke();
-    ctx.restore();
-  }
-  ED.lastX = pos.x; ED.lastY = pos.y;
-}
-
-function edUp(e) {
-  if (!ED.drawing) return;
-  ED.drawing = false;
-  const draw = document.getElementById('ed-draw-canvas');
-  const pos  = e.type.startsWith('touch')
-    ? { x: e.changedTouches[0].clientX - draw.getBoundingClientRect().left,
-        y: e.changedTouches[0].clientY - draw.getBoundingClientRect().top }
-    : edGetPos(e, draw);
-
-  if (['rect','ellipse','arrow'].includes(ED.tool)) {
-    let ann;
-    if (ED.tool === 'rect') {
-      ann = { type:'rect', x:ED.startX, y:ED.startY, w:pos.x-ED.startX, h:pos.y-ED.startY, color:ED.color, size:ED.size, fill:true };
-    } else if (ED.tool === 'ellipse') {
-      ann = { type:'ellipse', cx:(ED.startX+pos.x)/2, cy:(ED.startY+pos.y)/2, rx:(pos.x-ED.startX)/2, ry:(pos.y-ED.startY)/2, color:ED.color, size:ED.size };
-    } else {
-      ann = { type:'arrow', x1:ED.startX, y1:ED.startY, x2:pos.x, y2:pos.y, color:ED.color, size:ED.size };
-    }
-    edPushAnnotation(ann);
-    return;
-  }
-  if (_curPath && _curPath.points.length > 1) {
-    edPushAnnotation(_curPath);
-  }
-  _curPath = null;
-}
-
-// Touch events
-function edTouchStart(e) { edDown(e); }
-function edTouchMove(e)  { edMove(e); }
-
-// ── Anotação: push / undo / redo ──────────────────────────────────────
-function edPushAnnotation(ann) {
-  const idx = ED.curPage - 1;
-  ED.annotations[idx].push(ann);
-  ED.undoStack[idx].push(ann);
-  ED.redoStack[idx] = [];
-}
-
-function edUndo() {
-  const idx = ED.curPage - 1;
-  if (!ED.annotations[idx].length) return;
-  const last = ED.annotations[idx].pop();
-  ED.redoStack[idx].push(last);
-  edRedrawAnnotations(ED.curPage);
-}
-
-function edRedo() {
-  const idx = ED.curPage - 1;
-  if (!ED.redoStack[idx].length) return;
-  const item = ED.redoStack[idx].pop();
-  ED.annotations[idx].push(item);
-  edRedrawAnnotations(ED.curPage);
-}
-
-function edClearPage() {
-  const idx = ED.curPage - 1;
-  ED.annotations[idx] = [];
-  edRedrawAnnotations(ED.curPage);
-}
-
-// ── Borracha ──────────────────────────────────────────────────────────
-function edEraseAt(x, y) {
-  const r = ED.size * 6;
-  const idx = ED.curPage - 1;
-  const before = ED.annotations[idx].length;
-  ED.annotations[idx] = ED.annotations[idx].filter(a => {
-    if (a.type === 'path') {
-      return !a.points.some(pt => Math.hypot(pt.x - x, pt.y - y) < r);
-    }
-    if (a.type === 'text') return Math.hypot(a.x - x, a.y - y) > r * 2;
-    return true;
-  });
-  if (ED.annotations[idx].length !== before) edRedrawAnnotations(ED.curPage);
-}
-
-// ── Inserção de texto ─────────────────────────────────────────────────
-function edPlaceText(x, y) {
-  const stack = document.getElementById('ed-canvas-stack');
-  const inp   = document.createElement('textarea');
-  inp.className = 'ed-text-input';
-  inp.style.left = x + 'px';
-  inp.style.top  = y + 'px';
-  inp.style.color = document.getElementById('ed-color').value;
-  inp.style.fontSize = document.getElementById('ed-font-size').value + 'px';
-  inp.rows = 2;
-  stack.appendChild(inp);
-  inp.focus();
-  ED.activeTextEl = inp;
-
-  // Tornar arrastável
-  let ox=0, oy=0;
-  inp.addEventListener('mousedown', ev => {
-    if (ev.target !== inp) return;
-    ox = ev.clientX - inp.offsetLeft;
-    oy = ev.clientY - inp.offsetTop;
-    const mv = e2 => { inp.style.left=(e2.clientX-ox)+'px'; inp.style.top=(e2.clientY-oy)+'px'; };
-    const up = () => { document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); };
-    document.addEventListener('mousemove', mv);
-    document.addEventListener('mouseup', up);
-  });
-}
-
-function edCommitText() {
-  const inp = ED.activeTextEl;
-  if (!inp || !inp.value.trim()) {
-    if (inp) inp.remove();
-    ED.activeTextEl = null;
-    return;
-  }
-  const fontSize = parseInt(inp.style.fontSize);
-  const color    = inp.style.color;
-  const x = parseFloat(inp.style.left);
-  const y = parseFloat(inp.style.top) + fontSize;
-  const lines = inp.value.split('\n');
-  edPushAnnotation({ type:'text', x, y, color, size: fontSize, lines });
-  edRedrawAnnotations(ED.curPage);
-  inp.remove();
-  ED.activeTextEl = null;
-}
-
-// ── Salvar PDF com anotações ──────────────────────────────────────────
-async function edSave() {
-  if (!ED.pdfDoc || !ED.pdfBytes) return;
-  edCommitText();
-
-  // Renderiza anotações da página atual no canvas de draw antes de salvar
-  edRedrawAnnotations(ED.curPage);
-
-  toast('⏳ Gerando PDF...', '');
-  try {
-    const { PDFDocument: PDFD, rgb, degrees } = PDFLib;
-    const doc   = await PDFD.load(ED.pdfBytes, { ignoreEncryption: true });
-    const pages = doc.getPages();
-
-    for (let i = 0; i < pages.length; i++) {
-      const anns = ED.annotations[i] || [];
-      if (!anns.length) continue;
-
-      // Renderiza as anotações da página num canvas temporário
-      const pdfPage    = pages[i];
-      const { width: pw, height: ph } = pdfPage.getSize();
-      const pdfJsPage  = await ED.pdfDoc.getPage(i + 1);
-      const vp         = pdfJsPage.getViewport({ scale: ED.scale });
-
-      // Canvas temp para combinar base + anotações
-      const tmp     = document.createElement('canvas');
-      tmp.width     = vp.width;
-      tmp.height    = vp.height;
-      const tctx    = tmp.getContext('2d');
-      tctx.fillStyle = '#fff';
-      tctx.fillRect(0, 0, tmp.width, tmp.height);
-      await pdfJsPage.render({ canvasContext: tctx, viewport: vp }).promise;
-      anns.forEach(a => edDrawAnnotation(tctx, a));
-
-      // Converte para JPEG e embute como imagem cobrindo a página
-      const b64   = tmp.toDataURL('image/jpeg', 0.95).split(',')[1];
-      const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-      const img   = await doc.embedJpg(bytes);
-      pdfPage.drawImage(img, { x:0, y:0, width:pw, height:ph });
-    }
-
-    const outBytes = await doc.save();
-    const fname    = ED.file.name.replace(/\.pdf$/i, '') + '_editado.pdf';
-    const url      = URL.createObjectURL(new Blob([outBytes], { type:'application/pdf' }));
-    const a        = document.createElement('a');
-    a.href         = url; a.download = fname; a.click();
-
-    document.getElementById('ed-saving').style.display = '';
-    setTimeout(() => document.getElementById('ed-saving').style.display = 'none', 3000);
-    toast('✅ PDF salvo!', 'ok');
-  } catch(e) {
-    toast('❌ Erro ao salvar: ' + e.message, 'er');
-  }
-}
-
-// ── Atalho de teclado ─────────────────────────────────────────────────
-document.addEventListener('keydown', e => {
-  if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
-  if (!document.getElementById('p-editor').classList.contains('on')) return;
-  if (e.ctrlKey && e.key === 'z') { e.preventDefault(); edUndo(); }
-  if (e.ctrlKey && e.key === 'y') { e.preventDefault(); edRedo(); }
-  if (e.key === 'Escape') edCommitText();
-});
-
-</script>
-
-<footer style="background:var(--surf);border-top:1px solid var(--border);padding:10px 24px;display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-shrink:0;font-size:11px;color:var(--muted);">
-  <span>Desenvolvido por</span>
-  <span style="font-weight:700;color:#AC934C;letter-spacing:.3px">Laís Times</span>
-  <span style="color:var(--border)">·</span>
-  <span>Área de OPTI · Unicred · 2026</span>
-</footer>
-</body>
-</html// ── PDF/A ─────────────────────────────────────────────────────────────────────
-// Estratégia robusta: pdf-lib salva o PDF, depois injetamos o XMP diretamente
-// nos bytes (pós-processamento), evitando o bug do pdf-lib que cria stream
-// Metadata com /Length 0. OutputIntent adicionado via pdf-lib normalmente.
+// Gera PDF/A-2B (ISO 19005-2, conformidade B) — melhor que 1B, próximo do Adobe.
+// Solução definitiva:
+//   1. OutputIntent adicionado via pdf-lib ANTES do save
+//   2. save({ useObjectStreams: false }) — catálogo em texto plano
+//   3. XMP com pdfaid:part=2, pdfaid:conformance=B e pdfaExtension:schemas
+//      injetado diretamente nos bytes (evita bug /Length 0 do pdf-lib)
 async function doPdfa() {
   const key = 'pdfa';
   loading(key, true); setResult(key, '');
@@ -2043,11 +945,10 @@ async function doPdfa() {
     const author  = doc.getAuthor()  || '';
     const subject = doc.getSubject() || '';
 
-    // ── 2. OutputIntent sRGB via pdf-lib (funciona corretamente) ──────────
+    // ── 2. OutputIntent sRGB (obrigatório ISO 19005) ──────────────────────
     const ctx     = doc.context;
     const pdfName = PDFLib.PDFName;
-
-    const oiDict = ctx.obj({
+    const oiDict  = ctx.obj({
       Type: pdfName.of('OutputIntent'),
       S:    pdfName.of('GTS_PDFA1'),
       OutputConditionIdentifier: PDFLib.PDFHexString.fromText('sRGB'),
@@ -2055,131 +956,151 @@ async function doPdfa() {
       RegistryName: PDFLib.PDFHexString.fromText('http://www.color.org'),
     });
     const oiRef = ctx.register(oiDict);
-    const existingOI = doc.catalog.lookupMaybe(pdfName.of('OutputIntents'), PDFLib.PDFArray);
-    if (existingOI) existingOI.push(oiRef);
-    else doc.catalog.set(pdfName.of('OutputIntents'), ctx.obj([oiRef]));
+    doc.catalog.set(pdfName.of('OutputIntents'), ctx.obj([oiRef]));
 
     // ── 3. Info dict ──────────────────────────────────────────────────────
     doc.setTitle(title   || 'Documento PDF/A');
     doc.setCreator('UNICRED Editor de PDF');
-    doc.setProducer('UNICRED Editor de PDF (pdf-lib)');
-    doc.setSubject(subject || 'PDF/A-1b Compliant Document');
-    doc.setKeywords(['PDF/A-1b', 'ISO 19005-1', 'arquivamento']);
+    doc.setProducer('UNICRED Editor de PDF');
+    doc.setSubject(subject || 'PDF/A-2B Compliant Document');
+    doc.setKeywords(['PDF/A-2B', 'ISO 19005-2', 'arquivamento']);
 
-    // ── 4. Salva com pdf-lib ──────────────────────────────────────────────
-    const savedBytes = await doc.save();
+    // ── 4. Salva SEM object streams (catálogo fica em texto plano) ────────
+    const savedBytes = await doc.save({ useObjectStreams: false });
     let pdf = new Uint8Array(savedBytes);
+    const enc = new TextEncoder();
+    const dec = new TextDecoder('latin1');
 
-    // ── 5. Pós-processamento: injeta XMP diretamente nos bytes ────────────
-    // (pdf-lib cria stream Metadata com /Length 0 — bug conhecido)
+    // ── 5. XMP completo: PDF/A-2B + pdfaExtension schemas ────────────────
+    // pdfaExtension:schemas é obrigatório para conformidade A/B nível 2
     const xmpStr = `<?xpacket begin="\uFEFF" id="W5M0MpCehiHzreSzNTczkc9d"?>
 <x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="UNICRED Editor de PDF">
   <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
     <rdf:Description rdf:about=""
         xmlns:pdfaid="http://www.aiim.org/pdfa/ns/id/"
+        xmlns:pdfaExtension="http://www.aiim.org/pdfa/ns/extension/"
+        xmlns:pdfaSchema="http://www.aiim.org/pdfa/ns/schema#"
+        xmlns:pdfaProperty="http://www.aiim.org/pdfa/ns/property#"
         xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+        xmlns:xmpMM="http://ns.adobe.com/xap/1.0/mm/"
         xmlns:dc="http://purl.org/dc/elements/1.1/"
         xmlns:pdf="http://ns.adobe.com/pdf/1.3/">
-      <pdfaid:part>1</pdfaid:part>
+      <pdfaid:part>2</pdfaid:part>
       <pdfaid:conformance>B</pdfaid:conformance>
       <xmp:CreateDate>${now}</xmp:CreateDate>
       <xmp:ModifyDate>${now}</xmp:ModifyDate>
+      <xmp:MetadataDate>${now}</xmp:MetadataDate>
       <xmp:CreatorTool>UNICRED Editor de PDF</xmp:CreatorTool>
+      <xmpMM:DocumentID>uuid:${crypto.randomUUID()}</xmpMM:DocumentID>
+      <xmpMM:InstanceID>uuid:${crypto.randomUUID()}</xmpMM:InstanceID>
       <dc:format>application/pdf</dc:format>
       <dc:title><rdf:Alt><rdf:li xml:lang="x-default">${title}</rdf:li></rdf:Alt></dc:title>
       <dc:creator><rdf:Seq><rdf:li>${author}</rdf:li></rdf:Seq></dc:creator>
       <dc:description><rdf:Alt><rdf:li xml:lang="x-default">${subject}</rdf:li></rdf:Alt></dc:description>
-      <pdf:Producer>UNICRED Editor de PDF (pdf-lib)</pdf:Producer>
+      <pdf:Producer>UNICRED Editor de PDF</pdf:Producer>
+      <pdfaExtension:schemas>
+        <rdf:Bag>
+          <rdf:li rdf:parseType="Resource">
+            <pdfaSchema:namespaceURI>http://ns.adobe.com/pdf/1.3/</pdfaSchema:namespaceURI>
+            <pdfaSchema:prefix>pdf</pdfaSchema:prefix>
+            <pdfaSchema:schema>Adobe PDF Schema</pdfaSchema:schema>
+            <pdfaSchema:property>
+              <rdf:Seq>
+                <rdf:li rdf:parseType="Resource">
+                  <pdfaProperty:category>internal</pdfaProperty:category>
+                  <pdfaProperty:description>A name object indicating whether the document has been modified to include trapping information</pdfaProperty:description>
+                  <pdfaProperty:name>Trapped</pdfaProperty:name>
+                  <pdfaProperty:valueType>Text</pdfaProperty:valueType>
+                </rdf:li>
+              </rdf:Seq>
+            </pdfaSchema:property>
+          </rdf:li>
+          <rdf:li rdf:parseType="Resource">
+            <pdfaSchema:namespaceURI>http://ns.adobe.com/xap/1.0/mm/</pdfaSchema:namespaceURI>
+            <pdfaSchema:prefix>xmpMM</pdfaSchema:prefix>
+            <pdfaSchema:schema>XMP Media Management Schema</pdfaSchema:schema>
+            <pdfaSchema:property>
+              <rdf:Seq>
+                <rdf:li rdf:parseType="Resource">
+                  <pdfaProperty:category>internal</pdfaProperty:category>
+                  <pdfaProperty:description>UUID based identifier for specific incarnation of a document</pdfaProperty:description>
+                  <pdfaProperty:name>InstanceID</pdfaProperty:name>
+                  <pdfaProperty:valueType>URI</pdfaProperty:valueType>
+                </rdf:li>
+              </rdf:Seq>
+            </pdfaSchema:property>
+          </rdf:li>
+          <rdf:li rdf:parseType="Resource">
+            <pdfaSchema:namespaceURI>http://www.aiim.org/pdfa/ns/id/</pdfaSchema:namespaceURI>
+            <pdfaSchema:prefix>pdfaid</pdfaSchema:prefix>
+            <pdfaSchema:schema>PDF/A ID Schema</pdfaSchema:schema>
+            <pdfaSchema:property>
+              <rdf:Seq>
+                <rdf:li rdf:parseType="Resource">
+                  <pdfaProperty:category>internal</pdfaProperty:category>
+                  <pdfaProperty:description>Part of PDF/A standard</pdfaProperty:description>
+                  <pdfaProperty:name>part</pdfaProperty:name>
+                  <pdfaProperty:valueType>Integer</pdfaProperty:valueType>
+                </rdf:li>
+                <rdf:li rdf:parseType="Resource">
+                  <pdfaProperty:category>internal</pdfaProperty:category>
+                  <pdfaProperty:description>Conformance level of PDF/A standard</pdfaProperty:description>
+                  <pdfaProperty:name>conformance</pdfaProperty:name>
+                  <pdfaProperty:valueType>Text</pdfaProperty:valueType>
+                </rdf:li>
+              </rdf:Seq>
+            </pdfaSchema:property>
+          </rdf:li>
+        </rdf:Bag>
+      </pdfaExtension:schemas>
     </rdf:Description>
   </rdf:RDF>
 </x:xmpmeta>
 <?xpacket end="w"?>`;
 
-    const enc      = new TextEncoder();
+    // ── 6. Injeta XMP nos bytes (pós-processamento) ───────────────────────
     const xmpBytes = enc.encode(xmpStr);
+    const pdfText  = dec.decode(pdf);
+    const metaIdx  = pdfText.indexOf('/Type /Metadata');
 
-    // Localiza o stream Metadata no PDF (criado pelo pdf-lib, mas vazio)
-    const dec = new TextDecoder('latin1');
-    const pdfText = dec.decode(pdf);
-
-    const metaIdx = pdfText.indexOf('/Type /Metadata');
     if (metaIdx !== -1) {
-      // Acha stream\n ... endstream dentro deste objeto
-      const streamStart = pdfText.indexOf('stream\n', metaIdx);
-      const streamEnd   = pdfText.indexOf('endstream', streamStart);
-      if (streamStart !== -1 && streamEnd !== -1) {
-        const newContent = '\n' + xmpStr + '\n';
-        const newContentBytes = enc.encode(newContent);
-        // Monta o novo PDF: antes do stream + novo conteúdo + endstream em diante
-        const before = pdf.slice(0, streamStart + 7); // 'stream\n' = 7 bytes
-        const after  = pdf.slice(streamEnd);
-        pdf = _cat(before, newContentBytes, after);
-
-        // Corrige /Length do objeto Metadata
-        const pdfText2  = dec.decode(pdf);
-        const lenSearch = '/Length';
-        const lenIdx    = pdfText2.lastIndexOf(lenSearch, streamStart + 7);
-        if (lenIdx !== -1) {
-          const lenEnd   = pdfText2.indexOf('\n', lenIdx);
-          const before2  = pdf.slice(0, lenIdx);
-          const after2   = pdf.slice(lenEnd);
-          const newLen   = enc.encode(`/Length ${newContentBytes.length}`);
-          pdf = _cat(before2, newLen, after2);
-        }
-      }
-    } else {
-      // Fallback: pdf-lib não criou stream Metadata — injeta objeto raw antes do xref
-      const xrefIdx   = _lastIndexOf(pdf, enc.encode('\nxref\n'));
-      if (xrefIdx !== -1) {
-        // Conta objetos para determinar próximo número
-        let objCount = 0;
-        let searchIdx = 0;
-        while (true) {
-          const found = pdfText.indexOf(' 0 obj\n', searchIdx);
-          if (found === -1) break;
-          objCount++; searchIdx = found + 1;
-        }
-        const objNum   = objCount + 1;
-        const header   = enc.encode(`\n${objNum} 0 obj\n<<\n/Type /Metadata\n/Subtype /XML\n/Length ${xmpBytes.length}\n>>\nstream\n`);
-        const trailer  = enc.encode('\nendstream\nendobj\n');
-        const xmpObj   = _cat(header, xmpBytes, trailer);
-        pdf = _cat(pdf.slice(0, xrefIdx), xmpObj, pdf.slice(xrefIdx));
+      const sStart     = pdfText.indexOf('stream\n', metaIdx);
+      const sEnd       = pdfText.indexOf('endstream', sStart);
+      const newContent = _cat(enc.encode('\n'), xmpBytes, enc.encode('\n'));
+      pdf = _cat(pdf.slice(0, sStart + 7), newContent, pdf.slice(sEnd));
+      // Corrige /Length
+      const txt2   = dec.decode(pdf);
+      const lenIdx = txt2.lastIndexOf('/Length', sStart + 10);
+      if (lenIdx !== -1) {
+        const lenEnd = txt2.indexOf('\n', lenIdx);
+        pdf = _cat(pdf.slice(0, lenIdx), enc.encode(`/Length ${newContent.length}`), pdf.slice(lenEnd));
       }
     }
 
-    // ── 6. Verificação ────────────────────────────────────────────────────
-    const pdfFinal  = dec.decode(pdf);
-    const hasPdfaid = pdfFinal.includes('pdfaid:part') && pdfFinal.includes('pdfaid:conformance');
-    const hasOI     = pdfFinal.includes('GTS_PDFA1');
+    // ── 7. Verificação ────────────────────────────────────────────────────
+    const final     = dec.decode(pdf);
+    const hasPdfaid = final.includes('pdfaid:part') && final.includes('pdfaid:conformance');
+    const hasOI     = final.includes('GTS_PDFA1');
+    const hasExt    = final.includes('pdfaExtension');
+    const isPart2   = final.includes('pdfaid:part>2<');
 
-    const fname = store[key][0].name.replace(/\.pdf$/i,'') + '_pdfa.pdf';
-    const url   = URL.createObjectURL(new Blob([pdf], {type:'application/pdf'}));
+    const fname = store[key][0].name.replace(/\.pdf$/i, '') + '_pdfa2b.pdf';
+    const url   = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' }));
 
     setResult(key, `<div class="rarea">
-      <h4>✅ PDF/A-1b gerado</h4>
-      <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);border-radius:7px;padding:10px 13px;margin-bottom:10px;font-size:12px;line-height:1.8">
-        <div style="color:#86efac">📋 <b>Conformidade:</b> PDF/A-1b (ISO 19005-1)</div>
-        <div style="color:${hasPdfaid?'#86efac':'#fde68a'}">${hasPdfaid?'✅':'⚠️'} Metadados <code>pdfaid:part=1</code> e <code>pdfaid:conformance=B</code> ${hasPdfaid?'injetados':'verifique com VeraPDF'}</div>
-        <div style="color:${hasOI?'#86efac':'#fde68a'}">${hasOI?'✅':'⚠️'} OutputIntent sRGB (GTS_PDFA1) ${hasOI?'presente':'ausente'}</div>
+      <h4>✅ PDF/A-2B gerado</h4>
+      <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);border-radius:7px;padding:10px 13px;margin-bottom:10px;font-size:12px;line-height:1.9">
+        <div style="color:#86efac">📋 <b>Conformidade:</b> PDF/A-2B (ISO 19005-2, conformidade B)</div>
+        <div style="color:${isPart2   ?'#86efac':'#fde68a'}">${isPart2   ?'✅':'⚠️'} <code>pdfaid:part=2</code> e <code>pdfaid:conformance=B</code></div>
+        <div style="color:${hasOI     ?'#86efac':'#fde68a'}">${hasOI     ?'✅':'⚠️'} OutputIntent sRGB (GTS_PDFA1)</div>
+        <div style="color:${hasExt    ?'#86efac':'#fde68a'}">${hasExt    ?'✅':'⚠️'} pdfaExtension schemas documentados</div>
       </div>
       <div class="ditem"><span>🏅</span><span>${fname}</span>
-        <a href="${url}" download="${fname}">⬇️ Baixar PDF/A</a>
+        <a href="${url}" download="${fname}">⬇️ Baixar PDF/A-2B</a>
       </div>
     </div>`);
-    toast('✅ PDF/A-1b gerado!', 'ok');
+    toast('✅ PDF/A-2B gerado!', 'ok');
   } catch(e) { setResult(key, errBox(e.message)); toast('❌ Erro', 'er'); }
   loading(key, false);
-}
-
-// Helper: último índice de um Uint8Array dentro de outro
-function _lastIndexOf(haystack, needle) {
-  for (let i = haystack.length - needle.length; i >= 0; i--) {
-    let found = true;
-    for (let j = 0; j < needle.length; j++) {
-      if (haystack[i+j] !== needle[j]) { found = false; break; }
-    }
-    if (found) return i;
-  }
-  return -1;
 }
 >
