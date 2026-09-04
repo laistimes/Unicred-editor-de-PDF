@@ -323,7 +323,6 @@ select option{background:#1a1d27}
     <button class="tbtn" onclick="show('pdfa')"><div class="ic" style="background:rgba(34,197,94,.15)">🏅</div>Converter para PDF/A</button>
     <button class="tbtn" onclick="show('to_img')"><div class="ic" style="background:rgba(245,158,11,.15)">🖼️</div>PDF → Imagens</button>
     <button class="tbtn" onclick="show('to_excel')"><div class="ic" style="background:rgba(34,197,94,.15)">📊</div>PDF → Excel</button>
-    <button class="tbtn" onclick="show('to_ppt')"><div class="ic" style="background:rgba(234,88,12,.15)">📊</div>PDF → PowerPoint</button>
 
     <div class="sb-label">Segurança</div>
     <button class="tbtn" onclick="show('sign')"><div class="ic" style="background:rgba(16,185,129,.15)">✍️</div>Assinar PDF</button>
@@ -352,7 +351,6 @@ select option{background:#1a1d27}
           <div class="wchip" onclick="show('pdfa')"><div class="wci">🏅</div>PDF/A</div>
           <div class="wchip" onclick="show('to_img')"><div class="wci">🖼️</div>→ Imagens</div>
           <div class="wchip" onclick="show('to_excel')"><div class="wci">📊</div>→ Excel</div>
-          <div class="wchip" onclick="show('to_ppt')"><div class="wci">📊</div>→ PPT</div>
           <div class="wchip" onclick="show('sign')"><div class="wci">✍️</div>Assinar</div>
           <div class="wchip" onclick="show('watermark')"><div class="wci">💧</div>Marca d'água</div>
           <div class="wchip" onclick="show('protect')"><div class="wci">🔒</div>Senha</div>
@@ -365,7 +363,7 @@ select option{background:#1a1d27}
       <div class="ph"><h2>🔗 Mesclar PDFs</h2><p>Combine múltiplos PDFs em um único documento, na ordem que desejar.</p></div>
       <div class="dz" id="dz-merge" onclick="openPick('merge',true)" ondrop="drop(event,'merge')" ondragover="dov(event)" ondragleave="dol(event)">
         <input type="file" id="fi-merge" accept=".pdf" multiple onchange="addF('merge',this.files)">
-        <div class="di">📂</div><h3>Arraste PDFs aqui ou clique para selecionar</h3><p>Múltiplos arquivos · ordem pode ser arrastada abaixo</p>
+        <div class="di">📂</div><h3>Arraste PDFs aqui ou clique para selecionar</h3><p>Selecione 2 ou mais PDFs · a ordem pode ser arrastada abaixo</p>
       </div>
       <div class="flist" id="fl-merge"></div>
       <button class="btn btn-p btn-full" id="btn-merge" onclick="doMerge()" disabled>🔗 Mesclar PDFs</button>
@@ -757,7 +755,9 @@ let wmPos = 'c';
 function show(id) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('on'));
   document.querySelectorAll('.tbtn').forEach(b => b.classList.remove('active'));
-  document.getElementById('p-' + id).classList.add('on');
+  const panel = document.getElementById('p-' + id);
+  if (!panel) { console.warn('Painel não encontrado: p-' + id); return; }
+  panel.classList.add('on');
   document.querySelectorAll('.tbtn').forEach(b => {
     if (b.getAttribute('onclick') === `show('${id}')`) b.classList.add('active');
   });
@@ -809,9 +809,12 @@ function addF(key, fileList) {
   Array.from(fileList).forEach(f => { if (f.name.endsWith('.pdf')) store[key].push(f); });
   renderList(key);
   const btn = document.getElementById('btn-' + key);
-  if (btn) btn.disabled = !(store[key].length);
+  if (btn) {
+    const minFiles = key === 'merge' ? 2 : 1;
+    btn.disabled = store[key].length < minFiles;
+  }
 }
-function rmF(key, i) { store[key].splice(i, 1); renderList(key); const btn = document.getElementById('btn-' + key); if (btn) btn.disabled = !store[key].length; }
+function rmF(key, i) { store[key].splice(i, 1); renderList(key); const btn = document.getElementById('btn-' + key); if (btn) { const minFiles = key === 'merge' ? 2 : 1; btn.disabled = store[key].length < minFiles; } }
 function renderList(key) {
   const el = document.getElementById('fl-' + key);
   if (!el) return;
@@ -841,6 +844,11 @@ async function doMerge() {
   const key = 'merge';
   loading(key, true); setResult(key, '');
   try {
+    if (!store[key] || store[key].length < 2) {
+      setResult(key, errBox('Selecione pelo menos 2 arquivos PDF para mesclar.'));
+      toast('⚠️ Selecione 2 ou mais PDFs', '');
+      loading(key, false); return;
+    }
     const merged = await PDFDocument.create();
     for (const f of store[key]) {
       const ab = await readAB(f);
@@ -1075,6 +1083,26 @@ async function doPdfa() {
         const lenEnd = txt2.indexOf('\n', lenIdx);
         pdf = _cat(pdf.slice(0, lenIdx), enc.encode(`/Length ${newContent.length}`), pdf.slice(lenEnd));
       }
+    } else {
+      // Fallback: PDF sem stream Metadata — cria objeto novo antes do xref
+      const pdfStr2  = dec.decode(pdf);
+      const objNums  = [...pdfStr2.matchAll(/(\d+) 0 obj/g)].map(m => parseInt(m[1]));
+      const nextNum  = Math.max(...objNums) + 1;
+      const header   = enc.encode(`\n${nextNum} 0 obj\n<<\n/Type /Metadata\n/Subtype /XML\n/Length ${xmpBytes.length}\n>>\nstream\n`);
+      const trailer  = enc.encode('\nendstream\nendobj\n');
+      const xmpObj   = _cat(header, xmpBytes, trailer);
+      const xrefIdx  = _lastIndexOf(pdf, enc.encode('\nxref\n'));
+      if (xrefIdx !== -1) {
+        pdf = _cat(pdf.slice(0, xrefIdx), xmpObj, pdf.slice(xrefIdx));
+        // Aponta o catálogo para o novo Metadata
+        const pdfStr3  = dec.decode(pdf);
+        const catIdx   = pdfStr3.indexOf('/Type /Catalog');
+        if (catIdx !== -1) {
+          const catEnd = pdfStr3.indexOf('>>', catIdx);
+          const entry  = enc.encode(`\n/Metadata ${nextNum} 0 R`);
+          pdf = _cat(pdf.slice(0, catEnd), entry, pdf.slice(catEnd));
+        }
+      }
     }
 
     // ── 7. Verificação ────────────────────────────────────────────────────
@@ -1103,4 +1131,6 @@ async function doPdfa() {
   } catch(e) { setResult(key, errBox(e.message)); toast('❌ Erro', 'er'); }
   loading(key, false);
 }
->
+</script>
+</body>
+</html>
