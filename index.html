@@ -50,9 +50,9 @@ header span{color:var(--muted);font-size:12px;margin-left:6px}
 .tbtn .ic{width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
 
 /* Main */
-.main{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
-.panel{display:none;flex-direction:column;overflow-y:auto;padding:26px 28px;position:absolute;inset:0;background:var(--bg)}
-.panel.on{display:flex;z-index:1}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.panel{display:none;flex:1;flex-direction:column;overflow-y:auto;padding:26px 28px}
+.panel.on{display:flex}
 .ph{margin-bottom:22px}
 .ph h2{font-size:19px;font-weight:700;display:flex;align-items:center;gap:9px}
 .ph p{color:var(--muted);font-size:13px;margin-top:3px}
@@ -320,7 +320,6 @@ select option{background:#1a1d27}
     <button class="tbtn" onclick="show('editor')"><div class="ic" style="background:rgba(236,72,153,.15)">✏️</div>Editar PDF</button>
     <div class="sb-label">Converter</div>
     <button class="tbtn" onclick="show('img_to_pdf')"><div class="ic" style="background:rgba(16,185,129,.15)">🖼️</div>Imagens → PDF</button>
-    <button class="tbtn" onclick="show('pdfa')"><div class="ic" style="background:rgba(172,147,76,.15)">🏅</div>PDF/A</button>
     <button class="tbtn" onclick="show('to_img')"><div class="ic" style="background:rgba(245,158,11,.15)">🖼️</div>PDF → Imagens</button>
     <button class="tbtn" onclick="show('to_excel')"><div class="ic" style="background:rgba(34,197,94,.15)">📊</div>PDF → Excel</button>
 
@@ -347,12 +346,9 @@ select option{background:#1a1d27}
           <div class="wchip" onclick="show('rotate')"><div class="wci">🔄</div>Rotacionar</div>
           <div class="wchip" onclick="show('compress')"><div class="wci">📦</div>Compactar</div>
           <div class="wchip" onclick="show('editor')"><div class="wci">✏️</div>Editar PDF</div>
-          PDF/A</div>
           <div class="wchip" onclick="show('img_to_pdf')"><div class="wci">🖼️</div>→ PDF</div>
-          <div class="wchip" onclick="show('pdfa')"><div class="wci">🏅</div>PDF/A</div>
           <div class="wchip" onclick="show('to_img')"><div class="wci">🖼️</div>→ Imagens</div>
           <div class="wchip" onclick="show('to_excel')"><div class="wci">📊</div>→ Excel</div>
-          Assinar</div>
           <div class="wchip" onclick="show('watermark')"><div class="wci">💧</div>Marca d'água</div>
           <div class="wchip" onclick="show('protect')"><div class="wci">🔒</div>Senha</div>
         </div>
