@@ -426,7 +426,13 @@ select option{background:#1a1d27}
 
     <!-- PDF/A -->
     <div id="p-pdfa" class="panel">
-      <div class="ph"><h2>🏅 Converter para PDF/A</h2><p>Adiciona metadados de conformidade PDF/A-1b para arquivamento de longo prazo.</p></div>
+      <div class="ph"><h2>🏅 Converter para PDF/A</h2>
+        <p>Converte para PDF/A-2B (ISO 19005-2) com metadados XMP completos.</p>
+        <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.35);border-left:4px solid #f59e0b;border-radius:8px;padding:10px 14px;margin-top:10px;font-size:12px;line-height:1.7;color:var(--muted)">
+          ⚠️ <b style="color:#fde68a">Modo browser</b> — metadados PDF/A injetados, mas fontes podem não estar embutidas.<br>
+          Para conformidade total com <b style="color:var(--text)">Registro de Imóveis e VeraPDF</b>, use o
+          <b style="color:var(--text)">app portátil UNICRED</b> que converte via Ghostscript localmente.
+        </div></div>
       <div class="card" style="border-color:rgba(34,197,94,.25);background:rgba(34,197,94,.04)">
         <h3>📋 O que é PDF/A?</h3>
         <p style="font-size:12px;color:var(--muted);line-height:1.65">Padrão ISO para arquivamento digital. Garante que o documento esteja em conformidade com a ISO 19005. Esta ferramenta injeta os metadados XMP de conformidade PDF/A-1b no seu arquivo.</p>
@@ -501,81 +507,6 @@ select option{background:#1a1d27}
     </div>
 
     <!-- PDF TO WORD -->
-    <div id="p-to_word" class="panel">
-      <div class="ph">
-        <h2>📝 PDF para Word</h2>
-        <p>Extrai o texto do PDF e gera um arquivo <b>.docx</b> editável no Word, LibreOffice ou Google Docs.</p>
-      </div>
-
-      <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.4);border-radius:8px;padding:12px 14px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-start">
-        <span style="font-size:18px;flex-shrink:0">⚠️</span>
-        <div>
-          <div style="font-size:13px;font-weight:600;color:#fde68a;margin-bottom:3px">Imagens não são convertidas</div>
-          <div style="font-size:12px;color:var(--muted);line-height:1.6">
-            Somente o <b style="color:var(--text)">texto</b> do PDF é extraído. Imagens, gráficos e elementos visuais
-            <b style="color:var(--text)">não aparecem</b> no documento Word gerado.<br>
-            Se o PDF for composto só de imagens (ex: scan), o resultado pode ficar vazio.
-          </div>
-        </div>
-      </div>
-
-      <div class="dz" onclick="openPick('to_word',false)" ondrop="drop(event,'to_word')" ondragover="dov(event)" ondragleave="dol(event)">
-        <input type="file" id="fi-to_word" accept=".pdf" onchange="addF('to_word',this.files)">
-        <div class="di">📝</div>
-        <h3>Arraste um PDF ou clique para selecionar</h3>
-        <p>Gera arquivo .docx com o texto extraído</p>
-      </div>
-      <div class="flist" id="fl-to_word"></div>
-
-      <div class="card">
-        <h3>⚙️ Opções</h3>
-        <div class="fg">
-          <label>Estilo do documento</label>
-          <select id="word-style">
-            <option value="normal">Normal — parágrafos simples</option>
-            <option value="headings">Detectar títulos automaticamente (linhas em maiúsculas curtas)</option>
-          </select>
-        </div>
-      </div>
-
-      <button class="btn btn-p btn-full" id="btn-to_word" onclick="doToWord()" disabled>📝 Converter para Word</button>
-      <div class="ld" id="ld-to_word"><div class="spin"></div><span id="word-ptxt">Extraindo texto…</span></div>
-      <div class="prog-wrap" id="word-pw" style="display:none"><div class="prog-bar" id="word-pb" style="width:0%"></div></div>
-      <div id="res-to_word"></div>
-    </div>
-      <!-- Botões de assinatura -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">
-        <button class="btn btn-p btn-full" id="btn-sign" onclick="doSign()" disabled
-          style="display:flex;align-items:center;justify-content:center;gap:6px">
-          ✍️ Assinatura Visual
-        </button>
-        <button class="btn btn-full" id="btn-sign-serpro" onclick="doSignSerpro()" disabled
-          style="display:flex;align-items:center;justify-content:center;gap:6px;
-                 background:linear-gradient(135deg,#1a5276,#2e86c1);
-                 color:#fff;border:none;border-radius:var(--r);padding:10px;
-                 font-size:13px;font-weight:600;cursor:pointer;transition:.15s"
-          onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
-          🔐 Assinatura Digital (SERPRO)
-        </button>
-      </div>
-
-      <!-- Info SERPRO -->
-      <div id="serpro-info" style="display:none;background:rgba(41,128,185,.08);border:1px solid rgba(41,128,185,.35);border-radius:8px;padding:12px 14px;margin-bottom:10px;font-size:12px;line-height:1.7;color:var(--muted)">
-        <div style="font-weight:700;color:#5dade2;margin-bottom:6px">🔐 Assinatura Digital com Certificado ICP-Brasil</div>
-        <div>O <b style="color:var(--text)">Assinador SERPRO</b> será aberto automaticamente para assinar o PDF com seu <b style="color:var(--text)">e-CPF, e-CNPJ ou token A3</b>.</div>
-        <div style="margin-top:6px">A assinatura é <b style="color:var(--text)">reconhecida pelo ICP-Brasil</b> e aceita em cartórios, BACEN, Receita Federal e Registro de Imóveis.</div>
-        <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(41,128,185,.2)">
-          ⚠️ Requer <b style="color:var(--text)">Assinador SERPRO instalado</b> no computador.
-          <a href="https://www.serpro.gov.br/menu/noticias/noticias-2020/assinador-digital-serpro" target="_blank"
-             style="color:#5dade2;margin-left:4px">Baixar →</a>
-        </div>
-      </div>
-
-      <div class="ld" id="ld-sign"><div class="spin"></div>Aplicando assinatura…</div>
-      <div id="res-sign"></div>
-    </div>
-
-    <!-- WATERMARK -->
     <div id="p-watermark" class="panel">
       <div class="ph"><h2>💧 Marca d'água</h2><p>Adiciona texto em todas as páginas do documento.</p></div>
       <div class="dz" id="dz-watermark" onclick="openPick('watermark',false)" ondrop="drop(event,'watermark')" ondragover="dov(event)" ondragleave="dol(event)">
